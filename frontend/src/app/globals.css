@@ -1,0 +1,151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 26, 26, 27;
+  /* #1A1A1B */
+  --background-rgb: 253, 251, 247;
+  /* #FDFBF7 */
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: rgb(var(--background-rgb));
+  font-family: 'Inter', sans-serif;
+  height: 100vh;
+  margin: 0;
+  overflow: hidden;
+  /* Prevent scrolling on main body */
+}
+
+/* Halftone Pattern Overlay */
+.halftone-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: radial-gradient(#1A1A1B 1px, transparent 0);
+  background-size: 15px 15px;
+  opacity: 0.05;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Brutalist Utility Classes */
+.brutal-border {
+  border: 3px solid #1A1A1B;
+  box-shadow: 4px 4px 0px #1A1A1B;
+}
+
+.brutal-shadow {
+  box-shadow: 4px 4px 0px #1A1A1B;
+}
+
+.brutal-shadow-lg {
+  box-shadow: 8px 8px 0px #1A1A1B;
+}
+
+/* --- Excalidraw Branding Overrides --- */
+.excalidraw {
+  /* Fonts */
+  --ui-font: 'Space Grotesk', sans-serif !important;
+  font-family: 'Inter', sans-serif !important;
+
+  /* Colors (Trava Palette) */
+  --color-primary: #FF8C42;
+  /* Adventure Orange */
+  --color-primary-hover: #E57A36;
+  --color-primary-darker: #CC6520;
+  --color-primary-light: #FFF0E0;
+  /* Adventure Orange Light */
+
+  --color-secondary: #20C997;
+  /* Trava Teal */
+  --color-secondary-hover: #19A87E;
+
+  --island-bg-color: #FFFFFF;
+  --default-bg-color: #FDFBF7;
+  /* Retro Cream */
+
+  --text-primary-color: #1A1A1B;
+  /* Trava Black */
+  --color-gray-100: #1A1A1B;
+  --icon-fill-color: #1A1A1B;
+
+  --popup-bg-color: #FFFFFF;
+  --popup-secondary-bg-color: #FDFBF7;
+  /* Retro Cream */
+  --popup-text-color: #1A1A1B;
+
+  /* Shapes (Neo-Brutalism: Sharp Corners) */
+  --border-radius-lg: 0px;
+  --border-radius-md: 0px;
+
+  /* Shadows (Neo-Brutalism: Hard Shadows) */
+  --shadow-island: 4px 4px 0px #1A1A1B;
+  --modal-shadow: 8px 8px 0px #1A1A1B;
+
+  /* Borders */
+  --default-border-color: #1A1A1B;
+  --sidebar-border-color: #1A1A1B;
+  --button-border: 2px solid #1A1A1B;
+}
+
+/* Force Normal font (code 2) elements to use Inter */
+.excalidraw .FontPicker__button[aria-label="Normal"] {
+  font-family: 'Inter', sans-serif !important;
+}
+
+/* Override Toolbar Button Styles */
+.excalidraw .ToolIcon__icon,
+.excalidraw .App-toolbar__extra-tools-trigger {
+  border-radius: 0px !important;
+  border: 2px solid #1A1A1B !important;
+  /* Thick border */
+  background-color: white !important;
+}
+
+/* Active State for Buttons */
+.excalidraw .ToolIcon_type_radio:checked+.ToolIcon__icon,
+.excalidraw .ToolIcon_type_checkbox:checked+.ToolIcon__icon,
+.excalidraw .ToolIcon__icon:active,
+.excalidraw .App-toolbar__extra-tools-trigger--selected {
+  background-color: #FF8C42 !important;
+  /* Adventure Orange */
+  color: #1A1A1B !important;
+  --icon-fill-color: #1A1A1B !important;
+  box-shadow: 2px 2px 0px #1A1A1B !important;
+  /* Mini pop */
+  transform: translate(-1px, -1px);
+}
+
+/* Hover State for Buttons */
+.excalidraw .ToolIcon__icon:hover,
+.excalidraw .App-toolbar__extra-tools-trigger:hover {
+  background-color: #FFF0E0 !important;
+  /* Light Orange */
+  box-shadow: 2px 2px 0px #1A1A1B;
+}
+
+/* Dropdown Menus */
+.excalidraw .dropdown-menu-container {
+  border: 3px solid #1A1A1B !important;
+  border-radius: 0px !important;
+  box-shadow: 6px 6px 0px #1A1A1B !important;
+}
+
+/* Sidebar */
+.excalidraw .sidebar {
+  border-left: 3px solid #1A1A1B !important;
+  box-shadow: -4px 0px 0px transparent !important;
+  /* Remove shadow, use border */
+}
+
+/* Dialogs / Modals */
+.excalidraw .Modal__content {
+  border: 3px solid #1A1A1B !important;
+  border-radius: 0px !important;
+  box-shadow: 10px 10px 0px #1A1A1B !important;
+}

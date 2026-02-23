@@ -1,0 +1,42 @@
+'use client'
+
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/auth'
+
+// Set to true to enable authentication, false to bypass
+const AUTH_ENABLED = true
+
+interface ProtectedRouteProps {
+  children: React.ReactNode
+}
+
+export function ProtectedRoute({ children }: ProtectedRouteProps) {
+  const { user, loading } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (AUTH_ENABLED && !loading && !user) {
+      router.push('/login')
+    }
+  }, [user, loading, router])
+
+  // Bypass auth check if disabled
+  if (!AUTH_ENABLED) {
+    return <>{children}</>
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return null
+  }
+
+  return <>{children}</>
+}
