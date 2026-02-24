@@ -76,7 +76,7 @@ function DashboardContent() {
   const handleNewTrip = async () => {
     try {
       const data = await createTrip({
-        title: 'Start New Trip Board',
+        title: 'New Trip',
         destination: null
       })
       router.push(`/?trip=${data.id}`)

@@ -130,7 +130,7 @@ async def update_canvas(trip_id: str, canvas: CanvasState):
 
 class TripCreate(BaseModel):
     """Create trip request"""
-    title: str = "Start New Trip Board"
+    title: str = "New Trip"
     destination: Optional[str] = None
 
 
@@ -158,7 +158,8 @@ async def create_trip(trip: TripCreate, x_user_id: Optional[str] = Header(None))
         result = await db.create_trip(
             user_id=user_id,
             title=trip.title,
-            destination=trip.destination
+            destination=trip.destination,
+            status="active",
         )
 
         trip_id = result.get("id", "")

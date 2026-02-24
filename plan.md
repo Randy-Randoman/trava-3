@@ -136,6 +136,7 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 |---------------|--------|
 | Removed deprecated middleware (Next.js 16 renamed it to "proxy") — was causing "cannot find module" errors. Client-side redirect in page.tsx handles `/` → `/dashboard` instead. | ✅ |
 | Excalidraw lazy load: `<BoardWrapper>` only mounts when tripId exists. No Excalidraw bundle on welcome screen or dashboard. | ✅ |
+| Trips created with title "New Trip" and status "active" (was "Start New Trip Board" / "draft") | ✅ |
 
 ---
 

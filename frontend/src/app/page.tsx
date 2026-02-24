@@ -49,7 +49,7 @@ function HomeContent() {
       console.log('🆕 Creating new trip...')
 
       const data = await createTrip({
-        title: 'Start New Trip Board',
+        title: 'New Trip',
         destination: null
       })
 
