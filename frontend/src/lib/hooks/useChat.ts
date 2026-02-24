@@ -26,7 +26,9 @@ export function useChat(options: UseChatOptions) {
         const response = await fetch(`${BACKEND_URL}/chat/messages/${tripId}`)
 
         if (!response.ok) {
-          throw new Error('Failed to load messages')
+          // Chat endpoint may not be implemented yet (501) — just start with empty messages
+          console.log(`[Chat] Messages endpoint returned ${response.status}, starting fresh`)
+          return
         }
 
         const data = await response.json()

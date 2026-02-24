@@ -31,7 +31,7 @@ export function ChatInterface({ tripId, onDashboard }: ChatInterfaceProps) {
       {/* Header */}
       <div className="p-4 border-b-4 border-trava-black bg-retro-cream flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <img src="/trava-logo.png" alt="Trava Logo" className="h-8 w-auto object-contain scale-x-[-1]" />
+          <img src="/trava-logo.png" alt="Trava Logo" className="h-8 w-auto object-contain " />
           <div>
             <h1 className="text-xl font-black uppercase tracking-tighter text-trava-black leading-none">TRAVA</h1>
             <p className="text-xs font-bold text-gray-500">AI Travel Assistant</p>

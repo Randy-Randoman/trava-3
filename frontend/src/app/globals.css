@@ -13,10 +13,7 @@ body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-rgb));
   font-family: 'Inter', sans-serif;
-  height: 100vh;
   margin: 0;
-  overflow: hidden;
-  /* Prevent scrolling on main body */
 }
 
 /* Halftone Pattern Overlay */

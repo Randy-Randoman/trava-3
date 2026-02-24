@@ -22,10 +22,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Get initial session
     const getInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        if (error) {
+          console.warn('Auth session error (stale token?):', error.message)
+          // Clear any stale tokens
+          await supabase.auth.signOut()
+        }
+        setSession(error ? null : session)
+        setUser(error ? null : session?.user ?? null)
+      } catch (err) {
+        console.warn('Auth initialization failed:', err)
+        setSession(null)
+        setUser(null)
+      } finally {
+        setLoading(false)
+      }
     }
 
     getInitialSession()

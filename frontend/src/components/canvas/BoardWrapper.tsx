@@ -75,6 +75,7 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
           currentItemFontFamily: 2, // Default to "Normal" (Inter)
           viewBackgroundColor: '#FDFBF7', // Retro Cream
         },
+        scrollToContent: true,
         // Pass empty files initially - we'll hydrate them after
         files: {},
       })

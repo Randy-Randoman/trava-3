@@ -6,20 +6,37 @@
 
 ## Commands
 
-### Backend
+### Start the app (two terminals)
+
+Terminal 1 — Backend (http://localhost:8000):
 ```bash
-cd backend
-source .venv/bin/activate         # Activate venv
-uvicorn main:app --reload         # Start dev server (port 8000)
-pip install -r requirements.txt   # Install/update deps
-playwright install chromium       # Install browser for Booking.com scraping
+cd backend && source .venv/bin/activate && uvicorn main:app --reload
 ```
 
-### Frontend
+Terminal 2 — Frontend (http://localhost:3000):
+```bash
+cd frontend && npm run dev
+```
+
+### Backend setup
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+playwright install chromium       # Needed for Booking.com scraping
+```
+
+### Frontend setup
 ```bash
 cd frontend
-npm install          # Install deps
-npm run dev          # Start dev server (port 3000)
+npm install
+cp ../.env .env.local             # Frontend needs NEXT_PUBLIC_* vars
+```
+
+### Other frontend commands
+```bash
+cd frontend
 npm run build        # Production build
 npm run lint         # Run linter
 ```

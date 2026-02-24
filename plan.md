@@ -59,8 +59,20 @@ Same UI as trava-2 (dashboard, chat, Excalidraw) but with a new agent backend: L
 - [x] `uvicorn main:app` — starts, `/health` returns `{"status":"ok"}`
 - [x] All routes registered (trips CRUD, canvas, chat stubs)
 - [x] Supabase env vars load correctly
-- [ ] Create a trip → welcome canvas appears (needs running Supabase)
-- [ ] Excalidraw renders and auto-saves (needs running frontend + backend)
+- [x] Create a trip → welcome canvas appears
+- [x] Excalidraw renders with scrollToContent
+- [x] Dashboard scrolls, trip cards work
+- [x] Auth works (login/logout, stale token handling)
+- [x] Logo displays correctly
+
+### Fixes applied after initial scaffold
+- `public/` dir was missing — copied `trava-logo.png` + `excalidraw.css` from trava-2
+- Logo was mirrored — removed `scale-x-[-1]` from page.tsx, ChatInterface.tsx, dashboard
+- Board was over-zoomed — added `scrollToContent: true` to BoardWrapper initialData
+- Dashboard couldn't scroll — removed `overflow: hidden` from global body CSS (trip editor already constrains itself)
+- Auth token errors — AuthContext now handles stale refresh tokens gracefully (clears + redirects to login)
+- Chat messages 501 — useChat handles non-OK responses from stub endpoint without throwing
+- Chat send still returns 501 — expected, this is Phase 2 work (agent not implemented yet)
 
 ---
 

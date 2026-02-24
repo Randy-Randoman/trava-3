@@ -93,7 +93,7 @@ function HomeContent() {
           // No trip selected - show welcome screen with New Trip button
           <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-white/50">
             <div className="mb-8 rotate-3 group hover:rotate-6 transition-transform">
-              <img src="/trava-logo.png" alt="Trava Logo" className="w-32 h-auto object-contain scale-x-[-1] drop-shadow-[5px_5px_0px_rgba(26,26,27,0.2)]" />
+              <img src="/trava-logo.png" alt="Trava Logo" className="w-32 h-auto object-contain  drop-shadow-[5px_5px_0px_rgba(26,26,27,0.2)]" />
             </div>
             <h1 className="text-4xl font-black text-trava-black mb-4 uppercase tracking-tighter">Welcome to TRAVA</h1>
             <p className="text-gray-600 mb-10 max-w-md font-medium text-lg">

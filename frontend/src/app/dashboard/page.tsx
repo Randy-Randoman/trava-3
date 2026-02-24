@@ -112,7 +112,7 @@ function DashboardContent() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <img src="/trava-logo.png" alt="Trava Logo" className="h-10 w-auto object-contain scale-x-[-1]" />
+              <img src="/trava-logo.png" alt="Trava Logo" className="h-10 w-auto object-contain " />
               <div>
                 <h1 className="text-3xl font-black tracking-tighter text-trava-black uppercase leading-none">TRAVA</h1>
                 <p className="text-xs text-gray-500 font-bold">Plan Smarter.</p>
