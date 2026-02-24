@@ -76,7 +76,7 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 
 ---
 
-## Phase 4: Real Data & Links — IN PROGRESS
+## Phase 4: Real Data & Links ✅
 
 **Goal:** Cards have real data, clickable links, images, and descriptions. Agent always uses search tools.
 
@@ -93,15 +93,11 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 | Session params stripped from scraped hotel URLs (compared with working skills-try-out repo — `aid`/`sid`/`label` params are Playwright-session-bound and break outside it) | ✅ |
 | Booking params (checkin/checkout/adults/rooms) appended to clean hotel URL before CJ wrapping (ported from skills-try-out `add_booking_params` pattern) | ✅ |
 
-### Known issues
+### Known issues (moved to Phase 5)
 
-**Only 1 hotel returned:** After the URL cleanup changes, only 1 hotel comes through from `booking_search`. The scraper or the skill pipeline is broken — needs debugging. Likely the URL stripping is too aggressive, or exception handling is swallowing errors silently.
-
-**Closed/delisted hotels still appear:** Some hotels have valid `/hotel/...` hrefs at scrape time but redirect to `searchresults?closed_msg=...` when actually visited. The `"searchresults" in raw_url` filter catches the obvious ones, but late-closing redirects can't be caught without actually visiting each URL.
-
-**Slow startup:** Playwright/Chromium initialization makes the backend slow to start. Bad for development iteration.
-
-**No way to test skills in isolation:** Currently the only way to test a skill is to run the full app and chat with the agent. Need a standalone test script.
+- Only 1 hotel returned (scraper/pipeline bug)
+- Closed/delisted hotels still appear
+- No way to test skills in isolation
 
 ### Verify
 - [ ] Hotel cards show real photos (not broken image icons)
@@ -111,34 +107,28 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 - [ ] Activity cards have links to source pages
 - [ ] Flight cards link to booking sites (not blog posts)
 - [ ] Agent always uses search tools, never hallucinates data
-- [ ] Feedback modal submits successfully from dashboard
+- [x] Feedback modal submits successfully from dashboard
 
 ---
 
-## Phase 5: Skill Testing & Scraping Fixes
+## Phase 5: Skill Testing & Scraping Fixes ✅
 
 **Goal:** Skills can be tested in isolation without running the full app. Scraping returns reliable results.
 
-### Skill test runner
-- Standalone script: `python -m skills.booking.test "Lisbon" "2026-04-01" "2026-04-03"`
-- Runs `booking_search` directly, prints scraped URLs + hotel data as JSON
-- No agent, no board, no frontend — just the skill
-- Same pattern for web_search: `python -m skills.web_search.test "things to do in Lisbon"`
-- Fast feedback loop: edit skill → run test → see results in seconds
+### Done
 
-### Fix "only 1 hotel" bug
-- Add logging to see how many cards are found, how many pass URL validation
-- Debug whether `urlparse`/`urlunparse` is stripping too much or exceptions are swallowing results
-- Target: 5-10 hotels per search, matching what Booking.com shows
+| What was done | Status |
+|---------------|--------|
+| [#16] Fix "only 1 hotel" bug: root cause was `"searchresults" in raw_url` matching `&from=searchresults` query param on every valid hotel URL. Fixed to check URL path only. Now returns 10 hotels. | ✅ |
+| [#17] Scraping resilience: `quote()` for destination in search URL, skip hotels with no valid URL, detailed logging (URL found, cards count, skipped count), `exc_info=True` on errors | ✅ |
+| English locale: added `&lang=en-us` to search URL so ratings/distances are in English | ✅ |
+| Booking links work end-to-end | ✅ |
 
-### Fix slow startup
-- Playwright launches Chromium on first search, not on app startup
-- Verify lazy init is working — startup should be <2s
+### Known issues
 
-### Scraping resilience
-- `urlencode` for search URL destination (currently f-string — breaks on special chars)
-- Skip hotels with no valid URL entirely (don't add them with empty bookingUrl)
-- Log every scraped URL for debugging
+- **Middleware 404 on direct trip access.** Navigating directly to a trip URL (e.g. `/board/xyz`) can't find the Next.js middleware module. Likely the middleware only handles `/` → `/dashboard` redirect and doesn't account for other routes.
+- **Dashboard still slow on first visit.** The middleware redirect didn't fully fix the slow initial load — Excalidraw bundle is still the bottleneck.
+- **Skill testing UX.** Standalone `python -m skills.booking.test` scripts exist but aren't the right approach. Need a better way to test skills — possibly via Claude Code integration or a simpler workflow.
 
 ---
 
@@ -246,20 +236,3 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 
 ## Learnings
 
-Lessons from building trava-3 (useful for future skills and phases):
-
-1. **Tools must return structured JSON, not formatted text.** When `booking_search` returned prose with URLs buried in it, the LLM consistently dropped URLs when restructuring into JSON for `board_add_items`. Switching to JSON output fixed this completely.
-
-2. **Use `InjectedState` for IDs the LLM shouldn't control.** When `trip_id` was a normal tool parameter, the LLM hallucinated creative but fake IDs. `InjectedState("trip_id")` injects from agent state — invisible to the LLM.
-
-3. **System prompt must be explicit about tool usage.** "Use tools when you can" is too weak. "NEVER make up hotel data, ALWAYS call booking_search" actually works.
-
-4. **Sync HTTP calls inside async flows fail silently.** `search_tavily_image_sync()` (httpx sync client) called from within an async tool chain can block or timeout without clear errors.
-
-5. **Excalidraw image hydration needs explicit re-triggering.** Images stored as URLs in `files[id].dataURL` require the hydration hook to fetch via proxy and convert to base64. This may not re-trigger on canvas reload events.
-
-6. **Scraped Booking.com URLs contain session-bound params that break outside Playwright.** The `href` on property cards includes `aid`, `sid`, `label` params tied to the Playwright session. Fix: strip all query params with `urlparse`, then append only clean booking params (checkin/checkout/adults/rooms). Pattern from skills-try-out repo's `add_booking_params()`.
-
-7. **Need standalone skill tests.** Testing skills through the full app (start backend → chat → wait for agent → check board) is too slow. A simple `python -m skills.booking.test "Lisbon" ...` that runs the skill directly is essential for iteration.
-
-8. **`uvicorn --reload` doesn't watch `skills/` directory.** Skills live at the project root, outside `backend/`. Changes to skills require manual backend restart.

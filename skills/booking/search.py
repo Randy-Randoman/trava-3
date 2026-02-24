@@ -1,7 +1,7 @@
 """Playwright-based Booking.com hotel search scraping."""
 
 import logging
-from urllib.parse import urlencode, urlparse, urlunparse
+from urllib.parse import quote, urlencode, urlparse, urlunparse
 from .models import SearchParams, Hotel
 from .deeplink import build_affiliate_url
 
@@ -17,13 +17,16 @@ async def search_booking(
 
     url = (
         f"https://www.booking.com/searchresults.html"
-        f"?ss={params.destination}"
+        f"?ss={quote(params.destination)}"
         f"&checkin={params.checkin}"
         f"&checkout={params.checkout}"
         f"&group_adults={params.adults}"
         f"&no_rooms={params.rooms}"
         f"&selected_currency=EUR"
+        f"&lang=en-us"
     )
+
+    logger.info(f"Booking search URL: {url}")
 
     hotels = []
     async with get_page() as page:
@@ -40,7 +43,9 @@ async def search_booking(
 
         # Extract hotel cards
         cards = await page.query_selector_all('[data-testid="property-card"]')
+        logger.info(f"Found {len(cards)} property-card elements")
 
+        skipped = 0
         for card in cards[:10]:  # Limit to top 10
             try:
                 name = await _safe_text(card, '[data-testid="title"]')
@@ -63,9 +68,13 @@ async def search_booking(
                 raw_url = (
                     await link_el.get_attribute("href") if link_el else None
                 )
-                # Skip non-hotel URLs (Booking.com gives searchresults links
-                # for closed/unavailable hotels — these are dead links)
-                if raw_url and "searchresults" in raw_url:
+                logger.debug(f"  [{name}] link_el={'found' if link_el else 'MISSING'}, raw_url={raw_url!r}")
+                # Skip non-hotel URLs (Booking.com gives /searchresults.html
+                # links for closed/unavailable hotels — these are dead links).
+                # Note: don't match on full URL — every hotel URL has
+                # &from=searchresults in its query string.
+                if raw_url and "/searchresults" in urlparse(raw_url).path:
+                    logger.info(f"Skipping '{name}' — URL is a searchresults redirect")
                     hotel_url = None
                 elif raw_url:
                     # Strip session params (aid, sid, label) — they're bound to
@@ -111,9 +120,18 @@ async def search_booking(
                     else None
                 )
 
+                hotel_name = name or "Unknown Hotel"
+
+                if hotel_url is None:
+                    logger.info(f"Skipping hotel '{hotel_name}' — no valid URL")
+                    skipped += 1
+                    continue
+
+                logger.info(f"Parsed hotel '{hotel_name}' — url OK")
+
                 hotels.append(
                     Hotel(
-                        name=name or "Unknown Hotel",
+                        name=hotel_name,
                         price=price,
                         rating=rating,
                         review_count=review_count,
@@ -124,9 +142,10 @@ async def search_booking(
                     )
                 )
             except Exception as e:
-                logger.warning(f"Failed to parse hotel card: {e}")
+                logger.warning(f"Failed to parse hotel card (name={name!r}): {e}", exc_info=True)
                 continue
 
+    logger.info(f"Returning {len(hotels)} hotels ({skipped} skipped due to missing URL)")
     return hotels
 
 

@@ -214,3 +214,26 @@ Critical files to study:
 - `frontend/src/lib/hooks/useChat.ts` — SSE integration
 - `frontend/src/components/canvas/BoardWrapper.tsx` — Excalidraw embed
 - `frontend/src/lib/hooks/useExcalidrawHydration.ts` — image loading
+
+
+Lessons from building trava-3 (useful for future skills and phases):
+
+1. **Tools must return structured JSON, not formatted text.** When `booking_search` returned prose with URLs buried in it, the LLM consistently dropped URLs when restructuring into JSON for `board_add_items`. Switching to JSON output fixed this completely.
+
+2. **Use `InjectedState` for IDs the LLM shouldn't control.** When `trip_id` was a normal tool parameter, the LLM hallucinated creative but fake IDs. `InjectedState("trip_id")` injects from agent state — invisible to the LLM.
+
+3. **System prompt must be explicit about tool usage.** "Use tools when you can" is too weak. "NEVER make up hotel data, ALWAYS call booking_search" actually works.
+
+4. **Sync HTTP calls inside async flows fail silently.** `search_tavily_image_sync()` (httpx sync client) called from within an async tool chain can block or timeout without clear errors.
+
+5. **Excalidraw image hydration needs explicit re-triggering.** Images stored as URLs in `files[id].dataURL` require the hydration hook to fetch via proxy and convert to base64. This may not re-trigger on canvas reload events.
+
+6. **Scraped Booking.com URLs contain session-bound params that break outside Playwright.** The `href` on property cards includes `aid`, `sid`, `label` params tied to the Playwright session. Fix: strip all query params with `urlparse`, then append only clean booking params (checkin/checkout/adults/rooms). Pattern from skills-try-out repo's `add_booking_params()`.
+
+7. **Need standalone skill tests.** Testing skills through the full app (start backend → chat → wait for agent → check board) is too slow. A simple `python -m skills.booking.test "Lisbon" ...` that runs the skill directly is essential for iteration.
+
+8. **`uvicorn --reload` doesn't watch `skills/` directory.** Skills live at the project root, outside `backend/`. Changes to skills require manual backend restart.
+
+9. **Be careful with substring URL filters.** `"searchresults" in raw_url` was intended to catch closed-hotel redirect URLs (`/searchresults.html?closed_msg=...`) but matched ALL hotel URLs because Booking.com appends `&from=searchresults` to every href. Fix: check the URL **path** only (`"/searchresults" in urlparse(raw_url).path`). This was the root cause of the "only 1 hotel" bug.
+
+10. **Always set `&lang=en-us` in Booking.com scraper URL.** Without it, Booking.com auto-detects locale from the server's IP/headers, returning Portuguese text ("Pontuado com 7,9" instead of "Scored 7.9"). Explicit locale ensures consistent English output.

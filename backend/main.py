@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from app.services.playwright import shutdown_playwright
+from app.services.playwright import shutdown_playwright, warmup_playwright
 
 # Load environment variables from root .env
 load_dotenv(dotenv_path="../.env")
@@ -21,6 +21,8 @@ load_dotenv(dotenv_path="../.env")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle for the application."""
+    import asyncio
+    asyncio.create_task(warmup_playwright())
     yield
     # Shutdown: clean up shared resources
     await shutdown_playwright()

@@ -25,12 +25,12 @@ function HomeContent() {
     }
   }, [user, authLoading, router])
 
-  // Redirect to dashboard if no trip is selected
+  // Middleware handles redirect when no ?trip= param.
+  // This is a fallback for edge cases (e.g. client-side navigation).
   useEffect(() => {
     const tripParam = searchParams.get('trip')
     if (!tripParam && !authLoading) {
       router.push('/dashboard')
-      return
     }
   }, [searchParams, authLoading, router])
 

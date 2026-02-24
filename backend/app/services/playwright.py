@@ -83,6 +83,11 @@ def get_page() -> asynccontextmanager:
     return _service.get_page()
 
 
+async def warmup_playwright():
+    """Start browser in background so it's ready when the user chats."""
+    await _service._ensure_browser()
+
+
 async def shutdown_playwright():
     """Call on app shutdown."""
     await _service.shutdown()
