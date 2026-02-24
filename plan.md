@@ -76,46 +76,20 @@ Same UI as trava-2 (dashboard, chat, Excalidraw) but with a new agent backend: L
 
 ---
 
-## Phase 2: Skills + Agent
+## Phase 2: Skills + Agent — IN PROGRESS
 
 **Goal:** Agent can chat and call tools. Skills are loaded from the registry.
 
-### Skills Registry
-- `skills/__init__.py` — `load_all_skills()` discovers subpackages
+**Tracked in GitHub Issues:** https://github.com/Randy-Randoman/trava-3/issues
 
-### Booking Skill
-- `skills/booking/__init__.py` — exports TOOLS, PROMPT
-- `skills/booking/tools.py` — `@tool booking_search`, `@tool deeplink_generate`
-- `skills/booking/search.py` — Playwright Booking.com scraping
-- `skills/booking/deeplink.py` — CJ affiliate URL generation (port from skills-try-out)
-- `skills/booking/models.py` — Hotel, SearchParams
-
-### Web Search Skill
-- `skills/web_search/__init__.py` — exports TOOLS, PROMPT
-- `skills/web_search/tools.py` — `@tool web_search`, `@tool image_search` (Tavily)
-
-### Board Skill (stubs)
-- `skills/board/__init__.py` — exports TOOLS, PROMPT
-- `skills/board/tools.py` — stub implementations (Phase 3 wires them to canvas)
-- `skills/board/models.py` — BoardItem
-
-### LangGraph Agent
-- `backend/app/agent/state.py` — AgentState TypedDict (messages, trip_id, user_id)
-- `backend/app/agent/graph.py` — StateGraph with ReAct pattern, loads tools from skills registry
-
-### Chat Endpoint
-- `backend/app/api/chat.py` — rewrite for LangGraph SSE streaming
-  - Receives message + trip_id
-  - Loads conversation history from DB
-  - Invokes LangGraph agent
-  - Streams response via SSE (status, text, canvas_updated, done, error)
-  - Saves messages to DB
-
-### System Prompt
-- `backend/app/core/prompts.py` — new prompt for Claude + skill prompt injection
-
-### Playwright Service
-- `backend/app/services/playwright.py` — shared headless browser instance
+| # | Issue | Description | Depends on |
+|---|-------|-------------|------------|
+| #1 | LangGraph agent: state, graph, system prompt | Agent core — ReAct graph, swappable LLM, dynamic prompt | — |
+| #2 | Chat endpoint: SSE streaming with LangGraph | Rewrite chat.py stub for real streaming | #1 |
+| #3 | Playwright service: shared headless browser | Singleton browser manager for Booking.com scraping | — |
+| #4 | Booking skill: search + CJ affiliate links | Playwright scraping, deeplink generation, @tool wrappers | #3 |
+| #5 | Web search skill: Tavily integration | Web + image search @tools | — |
+| #6 | Board skill: stub tool implementations | Placeholder tools + BoardItem model for Phase 3 | — |
 
 ### Verify
 - [ ] Chat with agent — get a response
