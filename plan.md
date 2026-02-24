@@ -139,29 +139,26 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 
 ---
 
-## Phase 6: Smarter Agent
+## Phase 6: Smarter Agent — IN PROGRESS
 
 **Goal:** Agent is a real travel planner, not just a search wrapper. It builds coherent trips, suggests proactively, and helps with logistics.
 
-### Itinerary building
-- Agent can structure a trip day-by-day: "Day 1: Arrive, check in, explore neighborhood. Day 2: ..."
-- When adding to board, agent groups items by day/theme instead of dumping all at once
-- New board tool or prompt pattern: `board_add_items` with a `day` or `group` field → cards are visually grouped on canvas
+### Done
 
-### Proactive suggestions
-- After hotels are on the board, agent suggests activities nearby: "Your hotel is in Alfama — here's a Fado show 5 min walk away"
-- Weather context: "Lisbon in March: 18°C, occasional rain. Pack layers."
-- Timing advice: "Book this hotel soon — March is peak season"
+| What was done | Status |
+|---------------|--------|
+| System prompt rewritten: travel planner personality, day-by-day thinking, proactive suggestions, logistics advice, concise responses | ✅ |
 
-### Logistics help
-- Agent knows about airport transfers, public transport, walking distances
-- "Your hotel is 40 min from LIS airport. Uber ~€15, metro ~€1.50"
-- Can use `web_search` for this — no new skill needed, just better prompting
+### To verify (needs live testing)
+- [ ] Agent structures trips by day when asked to plan multi-day trips
+- [ ] Agent proactively suggests activities after hotel search
+- [ ] Agent gives practical logistics advice (transport, weather)
+- [ ] Agent stays concise — cards on board are the main output, not text walls
+- [ ] Agent still uses tools correctly (no hallucinated data)
 
-### What to build
-- Richer system prompt with travel planning personality and proactive behavior
-- Itinerary prompt pattern: guide agent to think in days, not just "here are 10 hotels"
-- Consider: `itinerary_search` tool that wraps web_search with structured day-plan output
+### Future (if prompt alone isn't enough)
+- `board_add_items` with `day` or `group` field → visual grouping on canvas
+- `itinerary_search` tool that wraps web_search with day-plan structure
 
 ---
 
