@@ -2,264 +2,264 @@
 
 ## Vision
 
-Same UI as trava-2 (dashboard, chat, Excalidraw) but with a new agent backend: LangGraph + skills system, incremental board management, Booking.com search with affiliate links.
+Travel planning platform powered by AI agents. User chats with the agent, agent searches real providers (Booking.com, web), places results as interactive cards on an Excalidraw canvas. Every hotel card carries an affiliate link — we earn commission on bookings.
 
-**MVP:** User chats → agent searches Booking.com → returns real hotels with affiliate links → user uses "add to board" button or calls it in chat → hotels appear as cards on Excalidraw canvas → user can iterate (add more, remove, replace).
+**MVP:** Chat → search Booking.com → real hotels with affiliate links → add to board as cards → iterate (add more, remove, replace) → user books via card links.
 
 ---
 
-## Decisions Made
+## Key Decisions
 
 | Topic | Decision | Rationale |
 |-------|----------|-----------|
-| **Repo** | New repo (trava-3) | Clean start, new architecture |
-| **Frontend** | Copy from trava-2 | Works well, minimal changes needed |
-| **Agent** | LangGraph (ReAct) | LLM-agnostic, composable |
-| **LLM** | Swappable (Gemini default, Anthropic optional) | Both supported via langchain, configured by env var |
-| **Skills** | Python packages at root `skills/`, auto-discovered | Easy to add new skills, signals future independence |
-| **Board** | Incremental (append/remove) | Fixes trava-2's full-replace problem |
-| **Board state** | board_items JSONB on trips | Agent can read what's on the board |
+| **Agent** | LangGraph ReAct | LLM-agnostic, composable, simple loop |
+| **LLM** | Swappable (Gemini default, Anthropic optional) | Both via langchain, env var config |
+| **Skills** | Python packages at root `skills/`, auto-discovered | Easy to add, signals future independence |
+| **Board** | Incremental (append/remove, not full replace) | Fixes trava-2's core problem |
+| **Board state** | `board_items` JSONB on trips table | Agent can read what's on the board |
 | **Hotel search** | Playwright + Booking.com | Real results, real links |
 | **Affiliate** | CJ deep links | Revenue on every booking |
-| **DB** | Supabase (same schema + board_items) | Proven, reusable |
+| **Tool → board data** | Tools return structured JSON, not text | LLMs drop URLs when converting text→JSON |
+| **Tool state injection** | `InjectedState("trip_id")` | LLMs hallucinate IDs if given as a normal param |
 
 ---
 
-## Phase 1: Scaffold + Copy ✅ DONE
+## Phase 1: Scaffold ✅
 
-**Goal:** Get the app shell running — frontend renders, backend starts, DB connects. No agent yet.
+Copied trava-2 frontend + backend, adapted for new architecture. App shell runs.
 
-**Status:** Completed 2025-02-23. All files copied, adapted, and verified.
+## Phase 2: Skills + Agent ✅
 
-### What was done
+LangGraph agent, 8 tools auto-discovered, SSE streaming chat, Playwright singleton.
 
-**Frontend** (33 files copied from trava-2):
-- All components, hooks, types, configs copied as-is
-- `useChat.ts` adapted: `board_data` handler → `canvas_updated` (server-side transform)
-- `api.ts` cleaned: removed dead `transformBoardData` function (endpoint no longer exists)
-- `supabase/client.ts`: added safe fallback for missing env vars (build-time safety)
-- `next build` passes cleanly
+## Phase 3: Board Intelligence ✅
 
-**Backend** (27 files):
-- `trips.py`: copied, `/trips/transform` endpoint removed
-- `transformer.py`: copied, `amadeus` imports replaced with local `validate_url`/`sanitize_url` helpers
-- `config.py`: adapted with `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `CJ_PID`, `CJ_AID`
-- `main.py`: adapted, Gemini/feedback imports removed, chat router mounted
-- `chat.py`: stub (501), `agent/graph.py` + `agent/state.py`: stubs
-- `database.py`, `templates.py`, `models/`, `migrations/001-004`: copied as-is
+Board tools wired to canvas (read/add/remove/clear), incremental masonry layout, `canvas_updated` SSE events, `InjectedState` for trip_id.
 
-**Infrastructure:**
-- `docker-compose.yml`, `.env.example`, `.gitignore`
-- `skills/` at root with registry (`load_all_skills()`) + 3 skill stubs (booking, board, web_search)
-- `migrations/005_board_items.sql` — board_items JSONB column
-- `requirements.txt` with all deps (fastapi, langgraph, langchain-google-genai, langchain-anthropic, playwright, tavily-python)
+<details>
+<summary>Phase 1-3 details (click to expand)</summary>
 
-### Verified
-- [x] `next build` — compiles, all routes render
-- [x] `uvicorn main:app` — starts, `/health` returns `{"status":"ok"}`
-- [x] All routes registered (trips CRUD, canvas, chat stubs)
-- [x] Supabase env vars load correctly
-- [x] Create a trip → welcome canvas appears
-- [x] Excalidraw renders with scrollToContent
-- [x] Dashboard scrolls, trip cards work
-- [x] Auth works (login/logout, stale token handling)
-- [x] Logo displays correctly
+### Phase 1: Scaffold + Copy
 
-### Fixes applied after initial scaffold
-- `public/` dir was missing — copied `trava-logo.png` + `excalidraw.css` from trava-2
-- Logo was mirrored — removed `scale-x-[-1]` from page.tsx, ChatInterface.tsx, dashboard
-- Board was over-zoomed — added `scrollToContent: true` to BoardWrapper initialData
-- Dashboard couldn't scroll — removed `overflow: hidden` from global body CSS (trip editor already constrains itself)
-- Auth token errors — AuthContext now handles stale refresh tokens gracefully (clears + redirects to login)
-- Chat messages 501 — useChat handles non-OK responses from stub endpoint without throwing
-- Chat send still returns 501 — expected, this is Phase 2 work (agent not implemented yet)
+**Completed 2025-02-23.**
 
----
+- Frontend: 33 files from trava-2, `useChat.ts` adapted for `canvas_updated`
+- Backend: FastAPI shell, trips CRUD, canvas CRUD, chat stub (501)
+- Skills registry with 3 stubs (booking, board, web_search)
+- Migration 005: `board_items` JSONB column
 
-## Phase 2: Skills + Agent ✅ DONE
+Fixes: missing `public/` dir, mirrored logo, over-zoomed board, dashboard scroll, auth token handling.
 
-**Goal:** Agent can chat and call tools. Skills are loaded from the registry.
+### Phase 2: Skills + Agent
 
-**Status:** Completed 2026-02-24. All 6 issues implemented and verified.
+**Completed 2026-02-24. Issues #1-#6.**
 
-**Tracked in GitHub Issues:** https://github.com/Randy-Randoman/trava-3/issues
+- Agent: ReAct graph, swappable LLM (Gemini/Anthropic), dynamic system prompt
+- Chat: SSE streaming (`status`/`text`/`canvas_updated`/`done`/`error`), message persistence
+- Skills: `booking_search`, `deeplink_generate`, `web_search`, `image_search`, 4 board stubs
+- Playwright singleton with graceful shutdown
 
-| # | Issue | Description | Status |
-|---|-------|-------------|--------|
-| #1 | LangGraph agent: state, graph, system prompt | Agent core — ReAct graph, swappable LLM (Gemini default), dynamic prompt | ✅ |
-| #2 | Chat endpoint: SSE streaming with LangGraph | Rewrote chat.py with real SSE streaming, message persistence | ✅ |
-| #3 | Playwright service: shared headless browser | Singleton browser manager with graceful shutdown | ✅ |
-| #4 | Booking skill: search + CJ affiliate links | Playwright scraping, deeplink generation, @tool wrappers | ✅ |
-| #5 | Web search skill: Tavily integration | Web + image search @tools | ✅ |
-| #6 | Board skill: stub tool implementations | Placeholder tools + BoardItem model for Phase 3 | ✅ |
+Fixes: lazy imports for skills, Gemini content block format, model upgrade to `gemini-3-flash-preview`.
 
-### What was built
+### Phase 3: Board Intelligence
 
-**Agent (8 tools loaded):**
-- `AgentState` TypedDict with messages, trip_id, user_id
-- LangGraph ReAct graph: START → agent → should_continue? → tools (loop) or END
-- Swappable LLM: Gemini (default, gemini-2.5-flash) or Anthropic (claude-sonnet-4.6)
-- Dynamic system prompt with skill prompts injected
+**Completed 2026-02-24. Issues #7-#10.**
 
-**Chat endpoint:**
-- `POST /chat/stream` — SSE streaming with status/text/error/done events
-- `GET /chat/messages/{trip_id}` — message history from DB
-- Content extraction handles both string and structured (Gemini) responses
+- DB: `get_board_items()` / `update_board_items()` on DatabaseService
+- Transformer: `generate_card_elements()` — masonry layout below existing content
+- Board tools: real implementations for read/add/remove/clear
+- SSE: `canvas_updated` event after board-mutating tools
 
-**Skills:**
-- `booking_search`, `deeplink_generate` — Playwright-based Booking.com scraping + CJ affiliate links
-- `web_search`, `image_search` — Tavily API integration
-- `board_read`, `board_add_items`, `board_remove_items`, `board_clear` — stubs for Phase 3
+Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `"udaipur_2026_luxury_gems"`.
 
-**Infrastructure:**
-- Playwright singleton service with async context manager
-- App lifespan handler for clean browser shutdown
-- Frontend error handling fix (useChat.ts no longer swallows error events)
-
-### Verified
-- [x] Chat with agent — get a response
-- [x] SSE streaming works (status updates, text response, done)
-- [x] 8 tools auto-discovered by skills registry
-- [x] Agent graph compiles and runs with all tools bound
-- [x] Board tools return stub messages (Phase 3 will wire them to canvas)
-
-### Fixes applied after initial implementation
-- `search.py`: lazy import of `app.services.playwright` (skills load from repo root, `app` only on path at runtime)
-- `chat.py`: `_extract_text()` handles Gemini's list-of-content-blocks response format
-- `useChat.ts`: inner catch only swallows `SyntaxError` (JSON parse), re-throws real errors
-- Model updated from deprecated `gemini-2.0-flash` to `gemini-3-flash-preview`
-
----
-
-## Phase 3: Board Intelligence ✅ DONE
-
-**Goal:** Agent can read, add to, remove from, and clear the board. Canvas updates incrementally.
-
-**Status:** Completed 2026-02-24. All 4 issues implemented and verified.
-
-| # | Issue | Description | Status |
-|---|-------|-------------|--------|
-| #7 | Database: board_items column + read/write | Migration + DatabaseService methods | ✅ |
-| #8 | Transformer: generate_card_elements() | Incremental card placement below existing content | ✅ |
-| #9 | Board tools: wire to canvas | Replace stubs with real read/add/remove/clear | ✅ |
-| #10 | SSE: canvas_updated from board tools | Emit event so frontend reloads canvas | ✅ |
-
-### What was built
-- `get_board_items()` / `update_board_items()` on DatabaseService
-- `generate_card_elements()` in transformer — masonry layout below existing content
-- All 4 board tools wired: board_read, board_add_items, board_remove_items, board_clear
-- `InjectedState("trip_id")` on all board tools — trip_id injected from agent state, not hallucinated by LLM
-- `canvas_updated` SSE event emitted after board-mutating tools run
-
-### Verified
-- [x] Board add/remove/read/clear works end-to-end
-- [x] Canvas updates live via SSE
-- [x] Cards appear on Excalidraw with masonry layout
-- [x] Multiple add rounds stack below previous cards
-
-### Fixes applied
-- Board tools originally took `trip_id` as a normal param — LLM hallucinated fake IDs like `"udaipur_2026_luxury_gems"`. Fixed with `InjectedState("trip_id")`.
-- Migration 005 must be run manually on Supabase (`ALTER TABLE trips ADD COLUMN board_items JSONB DEFAULT '[]'`)
-
-### Known issues (Phase 4)
-- Cards lack clickable affiliate links (see Phase 4 diagnosis)
-- Agent sometimes hallucates data instead of calling `booking_search`
-- No activity or flight search tools
+</details>
 
 ---
 
 ## Phase 4: Real Data & Links — IN PROGRESS
 
-**Goal:** Cards on the board have real, up-to-date data with clickable affiliate links. Agent always uses search tools.
+**Goal:** Cards have real data, clickable links, images, and descriptions. Agent always uses search tools.
 
-### Diagnosis
+### Done
 
-Testing revealed 4 issues with the current board cards:
+| What was done | Status |
+|---------------|--------|
+| `booking_search` returns structured JSON (not formatted text) — agent passes directly to `board_add_items`, URLs preserved | ✅ |
+| System prompt enforces tool usage, provides `board_add_items` JSON schema with `bookingUrl` field, guides `web_search` for activities/flights | ✅ |
+| [#11] Image pipeline fixed: `search_tavily_image` converted to async (was blocking event loop), Booking.com scraper now tries `data-src`/`srcset` for lazy-loaded images | ✅ |
+| [#12] `description` field flows through entire pipeline: `booking_search` → `generate_card_elements` → `create_card_group`. Prompt schema updated. | ✅ |
+| [#13] System prompt + web_search skill prompt guide agent to search Skyscanner/Google Flights/Kayak directly for flight bookingUrls | ✅ |
+| [#14] `POST /feedback` endpoint wired up in `main.py` — frontend modal → backend → DB | ✅ |
+| Session params stripped from scraped hotel URLs (compared with working skills-try-out repo — `aid`/`sid`/`label` params are Playwright-session-bound and break outside it) | ✅ |
+| Booking params (checkin/checkout/adults/rooms) appended to clean hotel URL before CJ wrapping (ported from skills-try-out `add_booking_params` pattern) | ✅ |
 
-**1. No clickable links on cards**
+### Known issues
 
-The pipeline *supports* links end-to-end:
-- `booking_search` → returns `Hotel` objects with `affiliate_url`
-- `generate_card_elements` → reads `bookingUrl` from item data
-- `create_card_group` → sets `link=booking_url` on the Excalidraw rectangle
+**Only 1 hotel returned:** After the URL cleanup changes, only 1 hotel comes through from `booking_search`. The scraper or the skill pipeline is broken — needs debugging. Likely the URL stripping is too aggressive, or exception handling is swallowing errors silently.
 
-But the break is in the middle: `booking_search` returns **formatted text** with URLs buried in prose. The LLM then calls `board_add_items` with a JSON string it constructs itself — and **drops the URLs** during that translation.
+**Closed/delisted hotels still appear:** Some hotels have valid `/hotel/...` hrefs at scrape time but redirect to `searchresults?closed_msg=...` when actually visited. The `"searchresults" in raw_url` filter catches the obvious ones, but late-closing redirects can't be caught without actually visiting each URL.
 
-**Root cause:** The agent reads text like `"Book: https://long-affiliate-url..."` and must manually extract it into structured JSON. LLMs reliably copy names/prices but often hallucinate or omit long URLs.
+**Slow startup:** Playwright/Chromium initialization makes the backend slow to start. Bad for development iteration.
 
-**2. No up-to-date data on cards**
-
-The agent sometimes skips `booking_search` entirely and uses training data to generate hotel names, prices, and ratings. The system prompt says "use search tools" but doesn't enforce it.
-
-**3. No activities**
-
-No activity search skill exists. When users ask for activities, the agent either:
-- Uses `web_search` (returns article links, not booking URLs)
-- Hallucates activity data from training knowledge
-
-**4. No flights**
-
-No flight search skill exists at all.
-
-### Plan
-
-| # | Issue | What to do |
-|---|-------|------------|
-| #11 | booking_search: return structured JSON | Return a JSON array of hotel objects (not formatted text). Agent can pass directly to board_add_items without lossy text→JSON conversion. URLs preserved. |
-| #12 | System prompt: enforce tool usage + board schema | Tell agent: (1) ALWAYS use booking_search, never make up hotels, (2) exact JSON schema for board_add_items with bookingUrl field, (3) pass search results directly to board tools |
-| #13 | System prompt: enforce tool usage + board schema | Tell agent: (1) ALWAYS use search tools, never make up data, (2) exact JSON schema for board_add_items with bookingUrl field, (3) pass search results directly to board tools, (4) use web_search for activities/flights when no dedicated tool exists |
-
-Issues #11 and #12 are the critical fixes. #13 improves activity/flight coverage using existing tools.
-
-**Approach for activities & flights:** We already have `web_search` (Tavily) and Playwright. The agent should use these to find real data:
-- **Activities:** `web_search` for activities at the destination, extract names/prices/URLs from results
-- **Flights:** Skyscanner via Playwright (same pattern as Booking.com scraper) — Future Phase skill
+**No way to test skills in isolation:** Currently the only way to test a skill is to run the full app and chat with the agent. Need a standalone test script.
 
 ### Verify
-- [ ] "Find hotels in Lisbon" → agent calls `booking_search` (not hallucinated)
-- [ ] "Add the top 3 to the board" → cards have clickable affiliate links
-- [ ] Click a card → opens real Booking.com page with affiliate tracking
-- [ ] "What activities can I do?" → agent uses web_search, returns real results with links
+- [ ] Hotel cards show real photos (not broken image icons)
+- [ ] Cards have descriptions of what to expect
+- [ ] Hotel cards have clickable links → opens Booking.com hotel page with dates pre-filled
+- [ ] Search returns 5-10 hotels (not just 1)
 - [ ] Activity cards have links to source pages
-- [ ] Agent never places cards with made-up data
+- [ ] Flight cards link to booking sites (not blog posts)
+- [ ] Agent always uses search tools, never hallucinates data
+- [ ] Feedback modal submits successfully from dashboard
 
 ---
 
-## Phase 5: End-to-End Polish
+## Phase 5: Skill Testing & Scraping Fixes
 
-**Goal:** Full flow works smoothly. Edge cases handled.
+**Goal:** Skills can be tested in isolation without running the full app. Scraping returns reliable results.
 
-### Integration Testing
-- Full chat → search → add to board → iterate flow
-- Multiple trips / boards
-- Dashboard thumbnails work with new board structure
-- Canvas auto-save still works after agent modifications
-- Image hydration works for hotel images
+### Skill test runner
+- Standalone script: `python -m skills.booking.test "Lisbon" "2026-04-01" "2026-04-03"`
+- Runs `booking_search` directly, prints scraped URLs + hotel data as JSON
+- No agent, no board, no frontend — just the skill
+- Same pattern for web_search: `python -m skills.web_search.test "things to do in Lisbon"`
+- Fast feedback loop: edit skill → run test → see results in seconds
 
-### Edge Cases
-- Agent adds items when board is empty (no existing elements)
-- Agent adds items when board has user-drawn content
-- Very long conversations (message history loading)
-- Playwright timeout / Booking.com blocks
-- Empty search results
+### Fix "only 1 hotel" bug
+- Add logging to see how many cards are found, how many pass URL validation
+- Debug whether `urlparse`/`urlunparse` is stripping too much or exceptions are swallowing results
+- Target: 5-10 hotels per search, matching what Booking.com shows
 
-### Polish
-- Status messages during long operations ("Searching Booking.com...")
-- Error handling in board tools (graceful failures)
+### Fix slow startup
+- Playwright launches Chromium on first search, not on app startup
+- Verify lazy init is working — startup should be <2s
 
-### Verify
-- [ ] Create new board → chat → search → add to board → see cards → iterate → all works
-- [ ] Dashboard shows boards with thumbnails
-- [ ] Affiliate links are correct CJ deep links
-- [ ] Canvas persists across page reloads
-- [ ] Multiple boards are independent
+### Scraping resilience
+- `urlencode` for search URL destination (currently f-string — breaks on special chars)
+- Skip hotels with no valid URL entirely (don't add them with empty bookingUrl)
+- Log every scraped URL for debugging
+
+---
+
+## Phase 6: Smarter Agent
+
+**Goal:** Agent is a real travel planner, not just a search wrapper. It builds coherent trips, suggests proactively, and helps with logistics.
+
+### Itinerary building
+- Agent can structure a trip day-by-day: "Day 1: Arrive, check in, explore neighborhood. Day 2: ..."
+- When adding to board, agent groups items by day/theme instead of dumping all at once
+- New board tool or prompt pattern: `board_add_items` with a `day` or `group` field → cards are visually grouped on canvas
+
+### Proactive suggestions
+- After hotels are on the board, agent suggests activities nearby: "Your hotel is in Alfama — here's a Fado show 5 min walk away"
+- Weather context: "Lisbon in March: 18°C, occasional rain. Pack layers."
+- Timing advice: "Book this hotel soon — March is peak season"
+
+### Logistics help
+- Agent knows about airport transfers, public transport, walking distances
+- "Your hotel is 40 min from LIS airport. Uber ~€15, metro ~€1.50"
+- Can use `web_search` for this — no new skill needed, just better prompting
+
+### What to build
+- Richer system prompt with travel planning personality and proactive behavior
+- Itinerary prompt pattern: guide agent to think in days, not just "here are 10 hotels"
+- Consider: `itinerary_search` tool that wraps web_search with structured day-plan output
+
+---
+
+## Phase 7: Better Board UX
+
+**Goal:** The board is worth planning on — not just a card dump, but a real trip planner.
+
+### Day-by-day layout
+- Cards grouped by day on the canvas (Day 1 column, Day 2 column, etc.)
+- Agent or transformer places cards in day groups
+- User can drag cards between days
+
+### Budget tracking
+- Board shows running total of all card prices
+- Could be a special "budget" element on the canvas, or a sidebar widget
+- Agent can answer "what's my total so far?" by reading board_items and summing prices
+
+### Shareable board links
+- `share_token` column already exists on trips
+- Build a public read-only view: `/board/:share_token`
+- No auth required — anyone with the link can see the board
+- Affiliate links still work on shared boards (revenue from shares!)
+
+### What to build
+- Transformer: day-group layout mode (cards in columns per day)
+- Budget component: sum prices from board_items, display on canvas or UI
+- Share page: public route that loads canvas_state read-only
+
+---
+
+## Phase 8: Scraping Resilience
+
+**Goal:** Booking.com scraping doesn't break silently. Failures are detected, logged, and handled.
+
+### Monitoring
+- Health check endpoint that runs a test search: `GET /health/booking`
+- Returns last successful scrape time, error count, avg response time
+
+### Fallback chain
+- If Playwright scraping fails: try 2 retries with different User-Agent
+- If still fails: fall back to `web_search` for hotels (lower quality but not broken)
+- Agent gets a clear message: "Live search is unavailable, using web results instead"
+
+### Error handling
+- Playwright timeout → return partial results if any, or clear error
+- Booking.com CAPTCHA/block → detect and report, don't hang
+- Rate limiting — don't hammer Booking.com (add delays between searches)
+
+---
+
+## Phase 9: End-to-End Polish
+
+**Goal:** Full flow works reliably. Edge cases handled. Ready for demo.
+
+| # | Area | What to verify / fix |
+|---|------|---------------------|
+| 1 | **Full flow** | Create board → chat → search → add to board → see cards → iterate → remove → all works |
+| 2 | **Multiple boards** | Each trip has independent board_items, canvas, conversation |
+| 3 | **Dashboard** | Thumbnails show card images from canvas state |
+| 4 | **Canvas persistence** | Auto-save works after agent modifications, survives page reload |
+| 5 | **Empty board** | Agent adds items when board has no existing elements |
+| 6 | **User content** | Agent additions don't erase user-drawn content (freehand, text, etc.) |
+| 7 | **Long conversations** | Message history loading works with 50+ messages |
+| 8 | **Empty search results** | "No hotels found" → agent tells user, doesn't add empty cards |
+| 9 | **Status messages** | "Searching Booking.com..." / "Adding to board..." shown during long operations |
+| 10 | **Feedback endpoint** | ✅ Already done in Phase 4 |
 
 ---
 
 ## Future Phases (post-MVP)
 
 - **Flight skill** — Skyscanner via Playwright (same pattern as Booking.com scraper)
-- **Board reconciliation** — detect when user deletes agent-placed cards
-- **Proper auth** — replace X-User-ID with JWT
-- **Production deploy** — Railway/Vercel
-- **External agent API** — Phase 2 of the big vision (skills as public API)
+- **Board reconciliation** — detect when user deletes agent-placed cards, sync board_items
+- **Proper auth** — replace X-User-ID header with JWT
+- **Production deploy** — Railway / Vercel
+- **External agent API** — skills as public API (Phase 2 of the big vision)
+
+---
+
+## Learnings
+
+Lessons from building trava-3 (useful for future skills and phases):
+
+1. **Tools must return structured JSON, not formatted text.** When `booking_search` returned prose with URLs buried in it, the LLM consistently dropped URLs when restructuring into JSON for `board_add_items`. Switching to JSON output fixed this completely.
+
+2. **Use `InjectedState` for IDs the LLM shouldn't control.** When `trip_id` was a normal tool parameter, the LLM hallucinated creative but fake IDs. `InjectedState("trip_id")` injects from agent state — invisible to the LLM.
+
+3. **System prompt must be explicit about tool usage.** "Use tools when you can" is too weak. "NEVER make up hotel data, ALWAYS call booking_search" actually works.
+
+4. **Sync HTTP calls inside async flows fail silently.** `search_tavily_image_sync()` (httpx sync client) called from within an async tool chain can block or timeout without clear errors.
+
+5. **Excalidraw image hydration needs explicit re-triggering.** Images stored as URLs in `files[id].dataURL` require the hydration hook to fetch via proxy and convert to base64. This may not re-trigger on canvas reload events.
+
+6. **Scraped Booking.com URLs contain session-bound params that break outside Playwright.** The `href` on property cards includes `aid`, `sid`, `label` params tied to the Playwright session. Fix: strip all query params with `urlparse`, then append only clean booking params (checkin/checkout/adults/rooms). Pattern from skills-try-out repo's `add_booking_params()`.
+
+7. **Need standalone skill tests.** Testing skills through the full app (start backend → chat → wait for agent → check board) is too slow. A simple `python -m skills.booking.test "Lisbon" ...` that runs the skill directly is essential for iteration.
+
+8. **`uvicorn --reload` doesn't watch `skills/` directory.** Skills live at the project root, outside `backend/`. Changes to skills require manual backend restart.

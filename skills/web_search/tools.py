@@ -1,5 +1,6 @@
 """Web search and image search tools using Tavily API."""
 
+import json
 import os
 
 from langchain_core.tools import tool
@@ -16,15 +17,15 @@ async def web_search(query: str) -> str:
     try:
         client = AsyncTavilyClient(api_key=api_key)
         response = await client.search(
-            query, max_results=5, search_depth="basic"
+            query, max_results=8, search_depth="basic"
         )
     except Exception as e:
         return f"Search failed: {e}"
 
     results = []
     for r in response.get("results", []):
-        results.append(f"**{r['title']}**\n{r['content']}\nSource: {r['url']}")
-    return "\n\n---\n\n".join(results) if results else "No results found."
+        results.append({"title": r["title"], "content": r["content"], "url": r["url"]})
+    return json.dumps(results) if results else "No results found."
 
 
 @tool

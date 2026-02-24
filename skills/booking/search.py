@@ -1,6 +1,7 @@
 """Playwright-based Booking.com hotel search scraping."""
 
 import logging
+from urllib.parse import urlencode, urlparse, urlunparse
 from .models import SearchParams, Hotel
 from .deeplink import build_affiliate_url
 
@@ -62,22 +63,51 @@ async def search_booking(
                 raw_url = (
                     await link_el.get_attribute("href") if link_el else None
                 )
-                hotel_url = (
-                    f"https://www.booking.com{raw_url}"
-                    if raw_url and raw_url.startswith("/")
-                    else raw_url
-                )
+                # Skip non-hotel URLs (Booking.com gives searchresults links
+                # for closed/unavailable hotels — these are dead links)
+                if raw_url and "searchresults" in raw_url:
+                    hotel_url = None
+                elif raw_url:
+                    # Strip session params (aid, sid, label) — they're bound to
+                    # Playwright's session and break outside it
+                    if raw_url.startswith("/"):
+                        raw_url = f"https://www.booking.com{raw_url}"
+                    parsed = urlparse(raw_url)
+                    hotel_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+                else:
+                    hotel_url = None
 
-                # Get image
+                # Get image (try src first, then data-src for lazy-loaded images)
                 img_el = await card.query_selector('img[data-testid="image"]')
-                image_url = (
-                    await img_el.get_attribute("src") if img_el else None
-                )
+                image_url = None
+                if img_el:
+                    image_url = await img_el.get_attribute("src")
+                    # Booking.com often lazy-loads with a tiny placeholder in src
+                    if not image_url or "data:image" in image_url:
+                        image_url = await img_el.get_attribute("data-src")
+                    if not image_url:
+                        # Try srcset as last resort
+                        srcset = await img_el.get_attribute("srcset")
+                        if srcset:
+                            image_url = srcset.split(",")[0].strip().split(" ")[0]
+
+                # Add booking params so hotel page shows correct dates/availability
+                if hotel_url:
+                    separator = "&" if "?" in hotel_url else "?"
+                    booking_params = urlencode({
+                        "checkin": params.checkin,
+                        "checkout": params.checkout,
+                        "group_adults": params.adults,
+                        "no_rooms": params.rooms,
+                    })
+                    parameterized_url = f"{hotel_url}{separator}{booking_params}"
+                else:
+                    parameterized_url = None
 
                 # Build affiliate link
                 affiliate_url = (
-                    build_affiliate_url(hotel_url, cj_pid, cj_aid)
-                    if hotel_url
+                    build_affiliate_url(parameterized_url, cj_pid, cj_aid)
+                    if parameterized_url
                     else None
                 )
 

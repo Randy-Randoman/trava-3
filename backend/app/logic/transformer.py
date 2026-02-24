@@ -58,9 +58,9 @@ def get_unsplash_url(search_term: str, width: int = 800, height: int = 600) -> s
     return f"https://source.unsplash.com/{width}x{height}/?{clean_term}"
 
 
-def search_tavily_image_sync(query: str) -> Optional[str]:
+async def search_tavily_image(query: str) -> Optional[str]:
     """
-    Search for a real image using Tavily API (synchronous version for transformer).
+    Search for a real image using Tavily API (async version).
     Falls back to Unsplash if Tavily fails.
 
     Args:
@@ -74,8 +74,8 @@ def search_tavily_image_sync(query: str) -> Optional[str]:
         if not api_key:
             return None
 
-        with httpx.Client(timeout=10.0) as client:
-            response = client.post(
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
                 "https://api.tavily.com/search",
                 json={
                     "api_key": api_key,
@@ -364,7 +364,7 @@ def estimate_text_height(text: str, width: float, font_size: int = FONT_SIZE) ->
     return lines * font_size * LINE_HEIGHT
 
 
-def create_card_group(
+async def create_card_group(
     x: float,
     y: float,
     title: str,
@@ -423,17 +423,21 @@ def create_card_group(
         char_width = CHAR_WIDTH * (font_size / 14)  # Scale based on 14px baseline
         return max(20, int(content_width / char_width))
 
-    # Use fallback image if no image_url provided
-    actual_image_url = image_url
-    if not actual_image_url and fallback_search:
-        # Try Tavily first for real photos, then fall back to Unsplash
+    # Get best image URL: prefer Tavily (reliable CDNs) over scraper URLs (often blocked)
+    actual_image_url = None
+    if fallback_search:
         print(f"[Transformer] Searching image for: {fallback_search}")
-        actual_image_url = search_tavily_image_sync(fallback_search)
+        actual_image_url = await search_tavily_image(fallback_search)
         if actual_image_url:
             print(f"[Transformer] Got Tavily image: {actual_image_url[:60]}...")
-        else:
-            actual_image_url = get_unsplash_url(fallback_search)
-            print(f"[Transformer] Using Unsplash fallback: {actual_image_url[:60]}...")
+    # Fall back to scraper URL if Tavily found nothing
+    if not actual_image_url and image_url:
+        actual_image_url = image_url
+        print(f"[Transformer] Using scraper image: {actual_image_url[:60]}...")
+    # Last resort: Unsplash
+    if not actual_image_url and fallback_search:
+        actual_image_url = get_unsplash_url(fallback_search)
+        print(f"[Transformer] Using Unsplash fallback: {actual_image_url[:60]}...")
 
     # Debug: Log the image URL being used
     if actual_image_url:
@@ -543,7 +547,7 @@ def _get_shortest_column(col_heights: List[float]) -> int:
     return col_heights.index(min(col_heights))
 
 
-def generate_excalidraw_scene(
+async def generate_excalidraw_scene(
     trip_data: Dict[str, Any],
     viewport_width: int = DEFAULT_VIEWPORT_WIDTH,
     viewport_height: int = DEFAULT_VIEWPORT_HEIGHT
@@ -615,7 +619,7 @@ def generate_excalidraw_scene(
         if flight.get("arrival_time"):
             desc_parts.append(f"Arrives: {flight.get('arrival_time')}")
 
-        card_elements, card_files, height = create_card_group(
+        card_elements, card_files, height = await create_card_group(
             x=x,
             y=y,
             title=flight.get("name", "Flight"),
@@ -669,7 +673,7 @@ def generate_excalidraw_scene(
         # Generate fallback search term based on stay name and location
         fallback_search = f"{stay.get('name', '')} {stay.get('location', '')} hotel"
 
-        card_elements, card_files, height = create_card_group(
+        card_elements, card_files, height = await create_card_group(
             x=x,
             y=y,
             title=stay.get("name", "Accommodation"),
@@ -744,7 +748,7 @@ def generate_excalidraw_scene(
             fallback_terms.append("culture museum")
         fallback_search = " ".join(fallback_terms)
 
-        card_elements, card_files, height = create_card_group(
+        card_elements, card_files, height = await create_card_group(
             x=x,
             y=y,
             title=activity.get("name", "Activity"),
@@ -779,7 +783,7 @@ def generate_excalidraw_scene(
     }
 
 
-def generate_card_elements(
+async def generate_card_elements(
     items: List[Dict[str, Any]],
     existing_elements: List[Dict[str, Any]],
     viewport_width: int = DEFAULT_VIEWPORT_WIDTH,
@@ -838,6 +842,7 @@ def generate_card_elements(
         rating = item.get("rating", "")
         review_count = item.get("review_count", item.get("reviewCount", ""))
         distance = item.get("distance", "")
+        description = item.get("description", "")
         image_url = item.get("image_url", item.get("imageUrl", ""))
         booking_url = item.get("booking_url", item.get("bookingUrl", item.get("url", "")))
 
@@ -854,11 +859,12 @@ def generate_card_elements(
         # Build price text
         price_text = f"💰 {price}" if price else ""
 
-        card_elements, card_files, height = create_card_group(
+        card_elements, card_files, height = await create_card_group(
             x=x,
             y=y,
             title=name,
             subtitle=subtitle,
+            description=description,
             price_text=price_text,
             card_type=item_type,
             image_url=image_url if image_url else None,

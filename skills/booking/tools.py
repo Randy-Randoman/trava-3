@@ -47,6 +47,16 @@ async def booking_search(
     # Return structured JSON — agent can pass this directly to board_add_items
     results = []
     for h in hotels:
+        # Build a description from available data
+        desc_parts = []
+        if h.rating:
+            desc_parts.append(f"Rating {h.rating}/10")
+        if h.review_count:
+            desc_parts.append(f"{h.review_count} reviews")
+        if h.distance:
+            desc_parts.append(h.distance)
+        desc_parts.append(f"Check-in: {checkin} · Check-out: {checkout}")
+
         item = {
             "name": h.name,
             "type": "stay",
@@ -54,6 +64,7 @@ async def booking_search(
             "rating": h.rating or "",
             "review_count": h.review_count or "",
             "distance": h.distance or "",
+            "description": " · ".join(desc_parts) if desc_parts else "",
             "bookingUrl": h.affiliate_url or h.url or "",
             "image_url": h.image_url or "",
         }

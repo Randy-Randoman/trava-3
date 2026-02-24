@@ -30,11 +30,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch the image
+    // Fetch the image with browser-like headers (needed for CDNs like bstatic.com)
     const response = await fetch(imageUrl, {
       headers: {
-        // Some servers require a user-agent
-        'User-Agent': 'Mozilla/5.0 (compatible; Trava/1.0)',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Referer': url.origin + '/',
       },
     });
 

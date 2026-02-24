@@ -83,7 +83,7 @@ async def board_add_items(
     current_board_items = await db.get_board_items(trip_id)
 
     # Generate card elements positioned below existing content
-    new_elements, new_files, group_ids = generate_card_elements(
+    new_elements, new_files, group_ids = await generate_card_elements(
         item_list, existing_elements
     )
 
