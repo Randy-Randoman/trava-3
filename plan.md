@@ -128,9 +128,14 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 
 ### Known issues
 
-- **Middleware module not found on direct trip access.** Navigating directly to a trip URL triggers a "cannot find middleware module" error.
-- **Dashboard still slow on first visit.** Excalidraw bundle is still the bottleneck on initial load.
 - **Skill testing UX.** Need a better way to test skills — possibly via Claude Code integration or a simpler workflow.
+
+### Bugs fixed after initial Phase 5
+
+| What was done | Status |
+|---------------|--------|
+| Removed deprecated middleware (Next.js 16 renamed it to "proxy") — was causing "cannot find module" errors. Client-side redirect in page.tsx handles `/` → `/dashboard` instead. | ✅ |
+| Excalidraw lazy load: `<BoardWrapper>` only mounts when tripId exists. No Excalidraw bundle on welcome screen or dashboard. | ✅ |
 
 ---
 
