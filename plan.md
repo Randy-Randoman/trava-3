@@ -139,7 +139,7 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 
 ---
 
-## Phase 6: Smarter Agent — IN PROGRESS
+## Phase 6: Smarter Agent ✅
 
 **Goal:** Agent is a real travel planner, not just a search wrapper. It builds coherent trips, suggests proactively, and helps with logistics.
 
@@ -149,7 +149,7 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 |---------------|--------|
 | System prompt rewritten: travel planner personality, day-by-day thinking, proactive suggestions, logistics advice, concise responses | ✅ |
 
-### To verify (needs live testing)
+### Verify (live testing)
 - [ ] Agent structures trips by day when asked to plan multi-day trips
 - [ ] Agent proactively suggests activities after hotel search
 - [ ] Agent gives practical logistics advice (transport, weather)
@@ -162,30 +162,27 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 
 ---
 
-## Phase 7: Better Board UX
+## Phase 7: Better Board UX — NEXT
 
 **Goal:** The board is worth planning on — not just a card dump, but a real trip planner.
 
-### Day-by-day layout
+### To do
+
+#### [#18] Day-by-day layout
 - Cards grouped by day on the canvas (Day 1 column, Day 2 column, etc.)
 - Agent or transformer places cards in day groups
 - User can drag cards between days
 
-### Budget tracking
+#### [#19] Budget tracking
 - Board shows running total of all card prices
 - Could be a special "budget" element on the canvas, or a sidebar widget
 - Agent can answer "what's my total so far?" by reading board_items and summing prices
 
-### Shareable board links
+#### [#20] Shareable board links
 - `share_token` column already exists on trips
 - Build a public read-only view: `/board/:share_token`
 - No auth required — anyone with the link can see the board
 - Affiliate links still work on shared boards (revenue from shares!)
-
-### What to build
-- Transformer: day-group layout mode (cards in columns per day)
-- Budget component: sum prices from board_items, display on canvas or UI
-- Share page: public route that loads canvas_state read-only
 
 ---
 
