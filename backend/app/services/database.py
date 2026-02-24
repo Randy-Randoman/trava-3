@@ -180,6 +180,24 @@ class DatabaseService:
         return response.data[0] if response.data else {}
 
     # ================================================
+    # Board Items Operations
+    # ================================================
+
+    async def get_board_items(self, trip_id: str) -> List[Dict[str, Any]]:
+        """Get board_items for a trip (list of agent-placed items)"""
+        print(f"[DB] get_board_items({trip_id})")
+        response = self.client.table("trips").select("board_items").eq("id", trip_id).limit(1).execute()
+        if response.data and response.data[0].get("board_items"):
+            return response.data[0]["board_items"]
+        return []
+
+    async def update_board_items(self, trip_id: str, items: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Update board_items for a trip"""
+        print(f"[DB] update_board_items({trip_id})")
+        response = self.client.table("trips").update({"board_items": items}).eq("id", trip_id).execute()
+        return response.data[0] if response.data else {}
+
+    # ================================================
     # Conversation Operations
     # ================================================
 

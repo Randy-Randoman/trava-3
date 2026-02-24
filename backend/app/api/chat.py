@@ -105,7 +105,12 @@ async def chat_stream(request: Request, body: ChatRequest):
                             assistant_response = _extract_text(last_msg.content)
                             yield _sse_event({"type": "text", "content": assistant_response})
                     elif node_name == "tools":
-                        # Tool finished executing -- could send status update
+                        # Check if a board-modifying tool ran → emit canvas_updated
+                        board_mutating_tools = {"board_add_items", "board_remove_items", "board_clear"}
+                        for msg in node_output.get("messages", []):
+                            if hasattr(msg, "name") and msg.name in board_mutating_tools:
+                                yield _sse_event({"type": "canvas_updated", "content": {"trip_id": trip_id}})
+                                break
                         yield _sse_event({"type": "status", "content": "Processing results..."})
 
             # 5. Save messages to DB after successful completion

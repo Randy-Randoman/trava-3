@@ -777,3 +777,105 @@ def generate_excalidraw_scene(
             "viewBackgroundColor": "#FDFBF7"  # Retro Cream
         }
     }
+
+
+def generate_card_elements(
+    items: List[Dict[str, Any]],
+    existing_elements: List[Dict[str, Any]],
+    viewport_width: int = DEFAULT_VIEWPORT_WIDTH,
+) -> tuple[List[Dict[str, Any]], Dict[str, Any], List[str]]:
+    """
+    Generate Excalidraw elements for new items, positioned below existing content.
+
+    This is the entry point for incremental board updates. Unlike generate_excalidraw_scene()
+    which creates a full scene, this only generates new elements to APPEND.
+
+    Args:
+        items: List of dicts with keys: name, type, price, rating, review_count,
+               distance, url/bookingUrl, image_url/imageUrl
+        existing_elements: Current canvas elements (to calculate positioning)
+        viewport_width: Canvas width for layout
+
+    Returns:
+        new_elements: Elements to APPEND to canvas
+        new_files: Files dict to MERGE into canvas files
+        group_ids: Group ID for each card (for board_items tracking)
+    """
+    layout = calculate_layout_params(viewport_width)
+    column_width = layout['column_width']
+    column_count = layout['column_count']
+    gap = layout['gap']
+    image_height = layout['image_height']
+
+    # Find the max_y of existing elements (bottom of existing content)
+    max_y = 0.0
+    for el in existing_elements:
+        if el.get("isDeleted"):
+            continue
+        el_bottom = el.get("y", 0) + el.get("height", 0)
+        if el_bottom > max_y:
+            max_y = el_bottom
+
+    # Start new cards below existing content with a gap
+    start_y = max_y + (gap * 2 if max_y > 0 else 0)
+
+    # Initialize column heights from start_y
+    col_heights = [start_y] * column_count
+
+    all_elements = []
+    all_files = {}
+    group_ids = []
+
+    for item in items:
+        col_idx = _get_shortest_column(col_heights)
+        x = gap + col_idx * (column_width + gap)
+        y = col_heights[col_idx]
+
+        # Normalize item keys (agent may use camelCase or snake_case)
+        name = item.get("name", "Unnamed")
+        item_type = item.get("type", "stay")
+        price = item.get("price", "")
+        rating = item.get("rating", "")
+        review_count = item.get("review_count", item.get("reviewCount", ""))
+        distance = item.get("distance", "")
+        image_url = item.get("image_url", item.get("imageUrl", ""))
+        booking_url = item.get("booking_url", item.get("bookingUrl", item.get("url", "")))
+
+        # Build subtitle
+        subtitle_parts = []
+        if rating:
+            subtitle_parts.append(f"⭐ {rating}")
+        if review_count:
+            subtitle_parts.append(f"({review_count} reviews)")
+        if distance:
+            subtitle_parts.append(f"📍 {distance}")
+        subtitle = " ".join(subtitle_parts)
+
+        # Build price text
+        price_text = f"💰 {price}" if price else ""
+
+        card_elements, card_files, height = create_card_group(
+            x=x,
+            y=y,
+            title=name,
+            subtitle=subtitle,
+            price_text=price_text,
+            card_type=item_type,
+            image_url=image_url if image_url else None,
+            column_width=column_width,
+            image_height=image_height,
+            fallback_search=f"{name} hotel" if item_type == "stay" else name,
+            booking_url=booking_url if booking_url else None,
+        )
+
+        # Extract the group_id from the first element (background rect has it)
+        card_group_id = card_elements[0]["groupIds"][0] if card_elements else _generate_id()
+        group_ids.append(card_group_id)
+
+        all_elements.extend(card_elements)
+        all_files.update(card_files)
+        col_heights[col_idx] += height + gap
+
+    print(f"[Transformer] generate_card_elements: {len(items)} items -> {len(all_elements)} elements, {len(all_files)} files")
+
+    return all_elements, all_files, group_ids
