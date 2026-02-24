@@ -1,5 +1,6 @@
 """LangChain @tool wrappers for Booking.com search and affiliate links."""
 
+import json
 import os
 from langchain_core.tools import tool
 from .search import search_booking
@@ -15,7 +16,7 @@ async def booking_search(
     adults: int = 2,
     rooms: int = 1,
 ) -> str:
-    """Search Booking.com for hotels. Returns results with prices, ratings, and affiliate booking links.
+    """Search Booking.com for hotels. Returns a JSON array of hotel objects that can be passed directly to board_add_items.
 
     Args:
         destination: City or area to search (e.g. "Lisbon", "Paris 7th arrondissement")
@@ -43,28 +44,22 @@ async def booking_search(
     if not hotels:
         return f"No hotels found in {destination} for {checkin} to {checkout}."
 
-    # Format results for the agent
+    # Return structured JSON — agent can pass this directly to board_add_items
     results = []
-    for i, h in enumerate(hotels, 1):
-        parts = [f"**{i}. {h.name}**"]
-        if h.price:
-            parts.append(f"   Price: {h.price}")
-        if h.rating:
-            parts.append(f"   Rating: {h.rating}")
-        if h.review_count:
-            parts.append(f"   Reviews: {h.review_count}")
-        if h.distance:
-            parts.append(f"   Distance: {h.distance}")
-        if h.affiliate_url:
-            parts.append(f"   Book: {h.affiliate_url}")
-        elif h.url:
-            parts.append(f"   Link: {h.url}")
-        results.append("\n".join(parts))
+    for h in hotels:
+        item = {
+            "name": h.name,
+            "type": "stay",
+            "price": h.price or "",
+            "rating": h.rating or "",
+            "review_count": h.review_count or "",
+            "distance": h.distance or "",
+            "bookingUrl": h.affiliate_url or h.url or "",
+            "image_url": h.image_url or "",
+        }
+        results.append(item)
 
-    return (
-        f"Found {len(hotels)} hotels in {destination} "
-        f"({checkin} to {checkout}):\n\n" + "\n\n".join(results)
-    )
+    return json.dumps(results)
 
 
 @tool
