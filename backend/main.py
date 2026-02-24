@@ -4,17 +4,31 @@ Run with: uvicorn main:app --reload
 """
 
 import os
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
+from app.services.playwright import shutdown_playwright
+
 # Load environment variables from root .env
 load_dotenv(dotenv_path="../.env")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown lifecycle for the application."""
+    yield
+    # Shutdown: clean up shared resources
+    await shutdown_playwright()
+
 
 app = FastAPI(
     title="TRAVA API",
     description="AI-powered travel planning assistant backend",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan,
 )
 
 # Configure CORS for frontend communication

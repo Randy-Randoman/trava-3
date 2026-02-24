@@ -143,7 +143,8 @@ export function useChat(options: UseChatOptions) {
                 throw new Error(data.content)
               }
             } catch (e) {
-              // Ignore JSON parse errors for incomplete chunks
+              if (e instanceof SyntaxError) continue // Ignore incomplete JSON chunks
+              throw e // Re-throw real errors (e.g. from error events)
             }
           }
         }

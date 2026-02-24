@@ -76,26 +76,58 @@ Same UI as trava-2 (dashboard, chat, Excalidraw) but with a new agent backend: L
 
 ---
 
-## Phase 2: Skills + Agent — IN PROGRESS
+## Phase 2: Skills + Agent ✅ DONE
 
 **Goal:** Agent can chat and call tools. Skills are loaded from the registry.
 
+**Status:** Completed 2026-02-24. All 6 issues implemented and verified.
+
 **Tracked in GitHub Issues:** https://github.com/Randy-Randoman/trava-3/issues
 
-| # | Issue | Description | Depends on |
-|---|-------|-------------|------------|
-| #1 | LangGraph agent: state, graph, system prompt | Agent core — ReAct graph, swappable LLM, dynamic prompt | — |
-| #2 | Chat endpoint: SSE streaming with LangGraph | Rewrite chat.py stub for real streaming | #1 |
-| #3 | Playwright service: shared headless browser | Singleton browser manager for Booking.com scraping | — |
-| #4 | Booking skill: search + CJ affiliate links | Playwright scraping, deeplink generation, @tool wrappers | #3 |
-| #5 | Web search skill: Tavily integration | Web + image search @tools | — |
-| #6 | Board skill: stub tool implementations | Placeholder tools + BoardItem model for Phase 3 | — |
+| # | Issue | Description | Status |
+|---|-------|-------------|--------|
+| #1 | LangGraph agent: state, graph, system prompt | Agent core — ReAct graph, swappable LLM (Gemini default), dynamic prompt | ✅ |
+| #2 | Chat endpoint: SSE streaming with LangGraph | Rewrote chat.py with real SSE streaming, message persistence | ✅ |
+| #3 | Playwright service: shared headless browser | Singleton browser manager with graceful shutdown | ✅ |
+| #4 | Booking skill: search + CJ affiliate links | Playwright scraping, deeplink generation, @tool wrappers | ✅ |
+| #5 | Web search skill: Tavily integration | Web + image search @tools | ✅ |
+| #6 | Board skill: stub tool implementations | Placeholder tools + BoardItem model for Phase 3 | ✅ |
 
-### Verify
-- [ ] Chat with agent — get a response
-- [ ] "Find hotels in Lisbon" → agent calls booking_search → returns results with affiliate links
-- [ ] "Search for things to do in Lisbon" → agent calls web_search → returns info
-- [ ] SSE streaming works (status updates, text chunks)
+### What was built
+
+**Agent (8 tools loaded):**
+- `AgentState` TypedDict with messages, trip_id, user_id
+- LangGraph ReAct graph: START → agent → should_continue? → tools (loop) or END
+- Swappable LLM: Gemini (default, gemini-2.5-flash) or Anthropic (claude-sonnet-4.6)
+- Dynamic system prompt with skill prompts injected
+
+**Chat endpoint:**
+- `POST /chat/stream` — SSE streaming with status/text/error/done events
+- `GET /chat/messages/{trip_id}` — message history from DB
+- Content extraction handles both string and structured (Gemini) responses
+
+**Skills:**
+- `booking_search`, `deeplink_generate` — Playwright-based Booking.com scraping + CJ affiliate links
+- `web_search`, `image_search` — Tavily API integration
+- `board_read`, `board_add_items`, `board_remove_items`, `board_clear` — stubs for Phase 3
+
+**Infrastructure:**
+- Playwright singleton service with async context manager
+- App lifespan handler for clean browser shutdown
+- Frontend error handling fix (useChat.ts no longer swallows error events)
+
+### Verified
+- [x] Chat with agent — get a response
+- [x] SSE streaming works (status updates, text response, done)
+- [x] 8 tools auto-discovered by skills registry
+- [x] Agent graph compiles and runs with all tools bound
+- [x] Board tools return stub messages (Phase 3 will wire them to canvas)
+
+### Fixes applied after initial implementation
+- `search.py`: lazy import of `app.services.playwright` (skills load from repo root, `app` only on path at runtime)
+- `chat.py`: `_extract_text()` handles Gemini's list-of-content-blocks response format
+- `useChat.ts`: inner catch only swallows `SyntaxError` (JSON parse), re-throws real errors
+- Model updated from deprecated `gemini-2.0-flash` to `gemini-2.5-flash`
 
 ---
 

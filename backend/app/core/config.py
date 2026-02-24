@@ -51,6 +51,9 @@ class Settings:
     CJ_PID: str = os.getenv("CJ_PID", "")
     CJ_AID: str = os.getenv("CJ_AID", "")
 
+    # LLM provider: "google" (default) or "anthropic"
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "google")
+
     # Application settings
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
     DEFAULT_USER_ID: str = os.getenv("DEFAULT_USER_ID", "67e4c780-75fe-4c18-8329-2492cedb57cc")
