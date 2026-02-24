@@ -119,6 +119,8 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 
 | What was done | Status |
 |---------------|--------|
+| Slow dashboard load fixed: Next.js middleware redirects `/` → `/dashboard` before Excalidraw bundle loads | ✅ |
+| Playwright browser warms up in background on backend startup (ready by the time user chats) | ✅ |
 | [#16] Fix "only 1 hotel" bug: root cause was `"searchresults" in raw_url` matching `&from=searchresults` query param on every valid hotel URL. Fixed to check URL path only. Now returns 10 hotels. | ✅ |
 | [#17] Scraping resilience: `quote()` for destination in search URL, skip hotels with no valid URL, detailed logging (URL found, cards count, skipped count), `exc_info=True` on errors | ✅ |
 | English locale: added `&lang=en-us` to search URL so ratings/distances are in English | ✅ |
@@ -126,9 +128,9 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 
 ### Known issues
 
-- **Middleware 404 on direct trip access.** Navigating directly to a trip URL (e.g. `/board/xyz`) can't find the Next.js middleware module. Likely the middleware only handles `/` → `/dashboard` redirect and doesn't account for other routes.
-- **Dashboard still slow on first visit.** The middleware redirect didn't fully fix the slow initial load — Excalidraw bundle is still the bottleneck.
-- **Skill testing UX.** Standalone `python -m skills.booking.test` scripts exist but aren't the right approach. Need a better way to test skills — possibly via Claude Code integration or a simpler workflow.
+- **Middleware module not found on direct trip access.** Navigating directly to a trip URL triggers a "cannot find middleware module" error.
+- **Dashboard still slow on first visit.** Excalidraw bundle is still the bottleneck on initial load.
+- **Skill testing UX.** Need a better way to test skills — possibly via Claude Code integration or a simpler workflow.
 
 ---
 
