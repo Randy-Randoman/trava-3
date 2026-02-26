@@ -137,6 +137,12 @@ class DatabaseService:
         response = self.client.table("trips").select("*").eq("share_token", share_token).limit(1).execute()
         return response.data[0] if response.data else None
 
+    async def set_share_token(self, trip_id: str, token: str) -> Dict[str, Any]:
+        """Set the share token for a trip"""
+        print(f"[DB] set_share_token({trip_id})")
+        response = self.client.table("trips").update({"share_token": token}).eq("id", trip_id).execute()
+        return response.data[0] if response.data else {}
+
     # ================================================
     # Canvas State Operations
     # ================================================

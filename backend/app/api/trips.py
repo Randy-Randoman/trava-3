@@ -2,6 +2,7 @@
 Trips API Endpoints - Save/Load Board State
 """
 
+import re
 import uuid
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
@@ -375,4 +376,121 @@ async def delete_trip(trip_id: str):
         raise
     except Exception as e:
         print(f"[API] Error deleting trip: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ================================================
+# Budget Endpoint (Issue #19)
+# ================================================
+
+@router.get("/trips/{trip_id}/budget")
+async def get_budget(trip_id: str):
+    """
+    GET /trips/{id}/budget
+
+    Returns the trip budget and running total spent from board items.
+    Extracts the first numeric value from each item's price string.
+    """
+    print(f"[API] GET /trips/{trip_id}/budget")
+
+    try:
+        trip = await db.get_trip(trip_id)
+        if not trip:
+            raise HTTPException(status_code=404, detail="Trip not found")
+
+        budget = trip.get("budget")  # Decimal or None from DB
+        board_items = trip.get("board_items") or []
+
+        spent = 0.0
+        items_with_prices = []
+        for bi in board_items:
+            data = bi.get("data", {})
+            price_str = str(data.get("price", "") or "")
+            # Extract first number from strings like "$234", "$234/night", "234 USD"
+            match = re.search(r"[\d]+\.?\d*", price_str.replace(",", ""))
+            if match:
+                try:
+                    price_val = float(match.group())
+                    spent += price_val
+                    items_with_prices.append({
+                        "name": bi.get("name", ""),
+                        "type": bi.get("type", ""),
+                        "price": price_val,
+                    })
+                except ValueError:
+                    pass
+
+        return {
+            "budget": float(budget) if budget is not None else None,
+            "spent": round(spent, 2),
+            "items": items_with_prices,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[API] Error getting budget: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ================================================
+# Share Endpoints (Issue #20)
+# ================================================
+
+@router.post("/trips/{trip_id}/share")
+async def share_trip(trip_id: str):
+    """
+    POST /trips/{id}/share
+
+    Generate (or return existing) share token for a trip.
+    Returns the share token so the frontend can build the share URL.
+    """
+    print(f"[API] POST /trips/{trip_id}/share")
+
+    try:
+        trip = await db.get_trip(trip_id)
+        if not trip:
+            raise HTTPException(status_code=404, detail="Trip not found")
+
+        # Reuse existing token if present, otherwise generate a new one
+        share_token = trip.get("share_token") or str(uuid.uuid4())
+        await db.set_share_token(trip_id, share_token)
+
+        return {"share_token": share_token}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[API] Error sharing trip: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/trips/public/{share_token}")
+async def get_public_board(share_token: str):
+    """
+    GET /trips/public/{share_token}
+
+    Public read-only board view — no auth required.
+    Returns trip title + canvas elements/files for display.
+    """
+    print(f"[API] GET /trips/public/{share_token}")
+
+    try:
+        trip = await db.get_trip_by_share_token(share_token)
+        if not trip:
+            raise HTTPException(status_code=404, detail="Board not found")
+
+        canvas = await db.get_canvas_state(trip["id"])
+
+        return {
+            "trip_id": trip["id"],
+            "title": trip.get("title", ""),
+            "elements": canvas.get("scene_elements", []) if canvas else [],
+            "files": canvas.get("scene_files", {}) if canvas else {},
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[API] Error fetching public board: {e}")
         raise HTTPException(status_code=500, detail=str(e))

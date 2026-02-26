@@ -53,7 +53,8 @@ async def board_add_items(
     Args:
         items: JSON string — a list of item objects. Each object should have:
             name (required), type ("stay"/"activity"), price, rating, review_count,
-            distance, url/bookingUrl, image_url/imageUrl
+            distance, url/bookingUrl, image_url/imageUrl.
+            Optional: day (int, e.g. 1), date (str, e.g. "2026-03-17") for day grouping.
     """
     from app.services.database import DatabaseService
     from app.logic.transformer import generate_card_elements
@@ -107,6 +108,8 @@ async def board_add_items(
             "id": _generate_id(),
             "type": item.get("type", "stay"),
             "name": item.get("name", "Unnamed"),
+            "day": item.get("day"),
+            "date": item.get("date"),
             "excalidraw_group_id": group_ids[i] if i < len(group_ids) else _generate_id(),
             "data": item,
             "added_at": datetime.now(timezone.utc).isoformat(),

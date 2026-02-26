@@ -204,3 +204,59 @@ export async function submitFeedback(feedback: string, username: string): Promis
   }
   return response.json()
 }
+
+/**
+ * Budget API (Issue #19)
+ */
+
+export interface BudgetItem {
+  name: string
+  type: string
+  price: number
+}
+
+export interface BudgetResponse {
+  budget: number | null
+  spent: number
+  items: BudgetItem[]
+}
+
+export async function getBudget(tripId: string): Promise<BudgetResponse> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${BACKEND_URL}/trips/${tripId}/budget`, { headers })
+  if (!response.ok) {
+    throw new Error(`Failed to fetch budget: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+/**
+ * Share API (Issue #20)
+ */
+
+export async function shareTrip(tripId: string): Promise<{ share_token: string }> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${BACKEND_URL}/trips/${tripId}/share`, {
+    method: 'POST',
+    headers,
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to share trip: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+export interface PublicBoardResponse {
+  trip_id: string
+  title: string
+  elements: unknown[]
+  files: Record<string, unknown>
+}
+
+export async function getPublicBoard(shareToken: string): Promise<PublicBoardResponse> {
+  const response = await fetch(`${BACKEND_URL}/trips/public/${shareToken}`)
+  if (!response.ok) {
+    throw new Error(`Board not found`)
+  }
+  return response.json()
+}
