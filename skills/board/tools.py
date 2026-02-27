@@ -88,15 +88,19 @@ async def board_add_items(
         existing_elements = []
         existing_files = {}
 
-    # ── Merge board items: new items replace existing items on the same day ──
-    incoming_days = {item.get("day") for item in item_list if item.get("day") is not None}
+    # # ── Merge board items: new items replace existing items on the same day ──
+    # incoming_days = {item.get("day") for item in item_list if item.get("day") is not None}
 
-    # Keep existing board items whose day is NOT being replaced
-    kept_board_items = []
-    for bi in current_board_items:
-        if bi.get("day") is not None and bi["day"] in incoming_days:
-            continue  # This day is being replaced by incoming items
-        kept_board_items.append(bi)
+    # # Keep existing board items whose day is NOT being replaced
+    # kept_board_items = []
+    # for bi in current_board_items:
+    #     if bi.get("day") is not None and bi["day"] in incoming_days:
+    #         continue  # This day is being replaced by incoming items
+    #     kept_board_items.append(bi)
+
+    # ── Merge board items: keep all existing items, append new ones ──
+    kept_board_items = list(current_board_items)
+
 
     # Strip ALL agent-placed elements from canvas (tagged with customData.agentPlaced)
     # Also strip legacy agent elements by group ID for backwards compat
