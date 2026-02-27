@@ -235,7 +235,8 @@ def _create_rectangle(
         "boundElements": None,
         "updated": 1,
         "link": validated_link,
-        "locked": False
+        "locked": False,
+        "customData": {"agentPlaced": True}
     }
 
 
@@ -286,7 +287,8 @@ def _create_text(
         "containerId": None,
         "originalText": text,
         "autoResize": True,
-        "lineHeight": LINE_HEIGHT
+        "lineHeight": LINE_HEIGHT,
+        "customData": {"agentPlaced": True}
     }
 
 
@@ -327,7 +329,8 @@ def _create_image(
         "locked": False,
         "fileId": file_id,
         "scale": [1, 1],
-        "status": "saved"
+        "status": "saved",
+        "customData": {"agentPlaced": True}
     }
 
 
@@ -604,7 +607,7 @@ async def generate_excalidraw_scene(
         # Build price text
         price_text = ""
         if flight.get("price"):
-            currency = flight.get("currency", "USD")
+            currency = flight.get("currency", "EUR")
             price_text = f"💰 {currency} {flight.get('price')}"
 
         # Build description
@@ -646,7 +649,7 @@ async def generate_excalidraw_scene(
         # Build price text
         price_text = ""
         if stay.get("price"):
-            currency = stay.get("currency", "USD")
+            currency = stay.get("currency", "EUR")
             price_text = f"💰 {currency} {stay.get('price')}"
             if stay.get("pricePerNight"):
                 price_text += "/night"
@@ -718,7 +721,7 @@ async def generate_excalidraw_scene(
         # Build price text
         price_text = ""
         if activity.get("price"):
-            currency = activity.get("currency", "USD")
+            currency = activity.get("currency", "EUR")
             price_text = f"💰 {currency} {activity.get('price')}"
             if activity.get("priceType"):
                 price_text += f" {activity.get('priceType')}"  # e.g., "/person"
@@ -791,23 +794,26 @@ async def generate_card_elements(
     """
     Generate Excalidraw elements for new items, positioned below existing content.
 
-    This is the entry point for incremental board updates. Unlike generate_excalidraw_scene()
-    which creates a full scene, this only generates new elements to APPEND.
+    Items with a 'day' field are grouped under day-section headers (Day 1, Day 2…).
+    Items without a 'day' field fall into an 'Unscheduled' section (or no header at all
+    if every item lacks a day, for backwards compatibility).
 
     Args:
         items: List of dicts with keys: name, type, price, rating, review_count,
-               distance, url/bookingUrl, image_url/imageUrl
+               distance, url/bookingUrl, image_url/imageUrl.
+               Optional: day (int), date (str "YYYY-MM-DD")
         existing_elements: Current canvas elements (to calculate positioning)
         viewport_width: Canvas width for layout
 
     Returns:
         new_elements: Elements to APPEND to canvas
         new_files: Files dict to MERGE into canvas files
-        group_ids: Group ID for each card (for board_items tracking)
+        group_ids: Group ID for each card (for board_items tracking), in input order
     """
+    from datetime import datetime as _dt
+
     layout = calculate_layout_params(viewport_width)
     column_width = layout['column_width']
-    column_count = layout['column_count']
     gap = layout['gap']
     image_height = layout['image_height']
 
@@ -820,67 +826,112 @@ async def generate_card_elements(
         if el_bottom > max_y:
             max_y = el_bottom
 
-    # Start new cards below existing content with a gap
     start_y = max_y + (gap * 2 if max_y > 0 else 0)
+    current_y = start_y
 
-    # Initialize column heights from start_y
-    col_heights = [start_y] * column_count
+    # Group items by day, preserving original indices for ordered group_ids output
+    day_item_indices: Dict[Any, List[int]] = {}
+    for i, item in enumerate(items):
+        day = item.get("day")  # int or None
+        if day not in day_item_indices:
+            day_item_indices[day] = []
+        day_item_indices[day].append(i)
 
-    all_elements = []
-    all_files = {}
-    group_ids = []
+    # Numbered days first (ascending), then None (unscheduled) last
+    sorted_days = sorted(day_item_indices.keys(), key=lambda d: (d is None, d or 0))
 
-    for item in items:
-        col_idx = _get_shortest_column(col_heights)
-        x = gap + col_idx * (column_width + gap)
-        y = col_heights[col_idx]
+    # Only show section headers when at least one item carries day info
+    has_day_info = any(d is not None for d in sorted_days)
 
-        # Normalize item keys (agent may use camelCase or snake_case)
-        name = item.get("name", "Unnamed")
-        item_type = item.get("type", "stay")
-        price = item.get("price", "")
-        rating = item.get("rating", "")
-        review_count = item.get("review_count", item.get("reviewCount", ""))
-        distance = item.get("distance", "")
-        description = item.get("description", "")
-        image_url = item.get("image_url", item.get("imageUrl", ""))
-        booking_url = item.get("booking_url", item.get("bookingUrl", item.get("url", "")))
+    all_elements: List[Dict[str, Any]] = []
+    all_files: Dict[str, Any] = {}
+    group_ids_map: Dict[int, str] = {}  # item index -> excalidraw group_id
 
-        # Build subtitle
-        subtitle_parts = []
-        if rating:
-            subtitle_parts.append(f"⭐ {rating}")
-        if review_count:
-            subtitle_parts.append(f"({review_count} reviews)")
-        if distance:
-            subtitle_parts.append(f"📍 {distance}")
-        subtitle = " ".join(subtitle_parts)
+    # ── Layout: each day is a column (left-to-right), cards stack vertically ──
+    for day_col, day in enumerate(sorted_days):
+        indices = day_item_indices[day]
+        col_x = gap + day_col * (column_width + gap)
+        col_y = current_y
 
-        # Build price text
-        price_text = f"💰 {price}" if price else ""
+        # ── Day-section header ──────────────────────────────────────────────
+        if has_day_info:
+            if day is not None:
+                first_date = next(
+                    (items[i].get("date") for i in indices if items[i].get("date")),
+                    None,
+                )
+                if first_date:
+                    try:
+                        d = _dt.strptime(first_date, "%Y-%m-%d")
+                        header_text = f"Day {day}  ·  {d.strftime('%A, %b %d')}"
+                    except Exception:
+                        header_text = f"Day {day}"
+                else:
+                    header_text = f"Day {day}"
+            else:
+                header_text = "Unscheduled"
 
-        card_elements, card_files, height = await create_card_group(
-            x=x,
-            y=y,
-            title=name,
-            subtitle=subtitle,
-            description=description,
-            price_text=price_text,
-            card_type=item_type,
-            image_url=image_url if image_url else None,
-            column_width=column_width,
-            image_height=image_height,
-            fallback_search=f"{name} hotel" if item_type == "stay" else name,
-            booking_url=booking_url if booking_url else None,
-        )
+            header_el = _create_text(
+                col_x,
+                col_y,
+                header_text,
+                column_width,
+                font_size=24,
+                group_ids=[],
+            )
+            all_elements.append(header_el)
+            header_h = estimate_text_height(header_text, column_width, 24)
+            col_y += header_h + gap
 
-        # Extract the group_id from the first element (background rect has it)
-        card_group_id = card_elements[0]["groupIds"][0] if card_elements else _generate_id()
-        group_ids.append(card_group_id)
+        # ── Cards stacked vertically within this day column ─────────────────
+        for idx in indices:
+            item = items[idx]
+            name = item.get("name", "Unnamed")
+            item_type = item.get("type", "stay")
+            price = item.get("price", "")
+            rating = item.get("rating", "")
+            review_count = item.get("review_count", item.get("reviewCount", ""))
+            distance = item.get("distance", "")
+            description = item.get("description", "")
+            image_url = item.get("image_url", item.get("imageUrl", ""))
+            booking_url = item.get("booking_url", item.get("bookingUrl", item.get("url", "")))
 
-        all_elements.extend(card_elements)
-        all_files.update(card_files)
-        col_heights[col_idx] += height + gap
+            subtitle_parts = []
+            if rating:
+                subtitle_parts.append(f"⭐ {rating}")
+            if review_count:
+                subtitle_parts.append(f"({review_count} reviews)")
+            if distance:
+                subtitle_parts.append(f"📍 {distance}")
+            subtitle = " ".join(subtitle_parts)
+
+            price_text = f"💰 {price}" if price else ""
+
+            card_elements, card_files, height = await create_card_group(
+                x=col_x,
+                y=col_y,
+                title=name,
+                subtitle=subtitle,
+                description=description,
+                price_text=price_text,
+                card_type=item_type,
+                image_url=image_url if image_url else None,
+                column_width=column_width,
+                image_height=image_height,
+                fallback_search=f"{name} hotel" if item_type == "stay" else name,
+                booking_url=booking_url if booking_url else None,
+            )
+
+            card_group_id = card_elements[0]["groupIds"][0] if card_elements else _generate_id()
+            group_ids_map[idx] = card_group_id
+
+            all_elements.extend(card_elements)
+            all_files.update(card_files)
+
+            col_y += height + gap
+
+    # Return group_ids in original input order
+    group_ids = [group_ids_map.get(i, _generate_id()) for i in range(len(items))]
 
     print(f"[Transformer] generate_card_elements: {len(items)} items -> {len(all_elements)} elements, {len(all_files)} files")
 

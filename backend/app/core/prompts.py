@@ -63,12 +63,23 @@ For activities from web_search, format as JSON:
     "price": "$25",
     "description": "Brief description of what to expect",
     "bookingUrl": "https://real-url-from-search-results.com",
-    "image_url": "https://real-image-url.com/photo.jpg"
+    "image_url": "https://real-image-url.com/photo.jpg",
+    "day": 2,
+    "date": "2026-03-18"
   }}
 ]
 ```
 
 CRITICAL: The "bookingUrl" field makes cards clickable — without it, the card is useless.
+
+## Day-by-day layout
+**Always include "day" and "date" fields** when adding items if the trip has a known itinerary:
+- `"day"`: integer (1, 2, 3…) — which day of the trip this item belongs to.
+- `"date"`: string in "YYYY-MM-DD" format — the calendar date for that day.
+
+The board groups cards under "Day 1", "Day 2" etc. headers. For hotels that span multiple days, \
+use the check-in day. For activities, use the day they happen. If you don't know which day yet, \
+omit these fields and items appear in an "Unscheduled" section.
 - Hotels: booking_search already includes bookingUrl, just pass through.
 - Activities: use the "url" field from web_search results as bookingUrl.
 - Flights: use Skyscanner/Google Flights/Kayak URL. Prefix price with "~" (approximate).

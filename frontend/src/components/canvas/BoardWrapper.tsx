@@ -36,12 +36,15 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   // Store the original files from backend (with URLs) for hydration
   const originalFilesRef = useRef<Record<string, unknown>>({})
+  // Keep a ref to the Excalidraw API so we can read scene state on flush
+  const excalidrawApiRef = useRef<ExcalidrawAPI | null>(null)
 
   // Hydration hook for loading URL-based images
   const { setExcalidrawApi, hydrateImages, clearCache, setOriginalFiles } = useExcalidrawHydration()
 
   // Callback when Excalidraw API is ready
   const onExcalidrawApiReady = useCallback((api: ExcalidrawAPI) => {
+    excalidrawApiRef.current = api
     setExcalidrawApi(api)
     // Pass the original files from backend and hydrate
     setOriginalFiles(originalFilesRef.current)
@@ -109,6 +112,48 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
     }
   }, [tripId, loadCanvas])
 
+  // Listen for flush-canvas events (fired by ShareButton before generating share link)
+  // to ensure the latest canvas state is persisted before anyone opens the share URL.
+  useEffect(() => {
+    const handleFlush = async () => {
+      const api = excalidrawApiRef.current
+      if (!api || !tripId || readOnly) return
+
+      // Cancel any pending debounced save
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+        saveTimeoutRef.current = null
+      }
+
+      try {
+        const elements = api.getSceneElements()
+        const files = api.getFiles()
+        const originalFiles = originalFilesRef.current
+        const filesToSave: Record<string, unknown> = {}
+        for (const [id, file] of Object.entries(originalFiles)) {
+          filesToSave[id] = file
+        }
+        if (files) {
+          for (const [id, file] of Object.entries(files)) {
+            if (!originalFiles[id]) {
+              filesToSave[id] = file
+            }
+          }
+        }
+
+        await saveCanvasState(tripId, [...elements], filesToSave)
+        console.log('[BoardWrapper] Canvas flushed for share')
+      } catch (err) {
+        console.error('[BoardWrapper] Failed to flush canvas:', err)
+      }
+
+      window.dispatchEvent(new CustomEvent('canvas-flushed'))
+    }
+
+    window.addEventListener('flush-canvas', handleFlush)
+    return () => window.removeEventListener('flush-canvas', handleFlush)
+  }, [tripId, readOnly])
+
   // Auto-save with debounce
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleChange = useCallback((elements: readonly any[], _appState: any, files: any) => {
@@ -147,6 +192,8 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
 
         await saveCanvasState(tripId, [...elements], filesToSave)
         console.log('🎨 Canvas saved (preserved URL-based files)')
+        // Notify other components (e.g. BudgetPanel) that the canvas changed
+        window.dispatchEvent(new CustomEvent('canvas-saved', { detail: { tripId } }))
       } catch (err) {
         console.error('Failed to save:', err)
       }

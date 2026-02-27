@@ -137,6 +137,12 @@ class DatabaseService:
         response = self.client.table("trips").select("*").eq("share_token", share_token).limit(1).execute()
         return response.data[0] if response.data else None
 
+    async def set_share_token(self, trip_id: str, token: str) -> Dict[str, Any]:
+        """Set the share token for a trip"""
+        print(f"[DB] set_share_token({trip_id})")
+        response = self.client.table("trips").update({"share_token": token}).eq("id", trip_id).execute()
+        return response.data[0] if response.data else {}
+
     # ================================================
     # Canvas State Operations
     # ================================================
@@ -155,7 +161,7 @@ class DatabaseService:
         scene_app_state: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """
-        Update canvas state for a trip
+        Update canvas state for a trip (upsert to guarantee persistence)
 
         Args:
             trip_id: The trip ID
@@ -176,7 +182,14 @@ class DatabaseService:
         if not update_data:
             return {}
 
-        response = self.client.table("canvas_states").update(update_data).eq("trip_id", trip_id).execute()
+        # Use upsert to ensure the row is created if it doesn't exist yet.
+        # The trigger on trips should create canvas_states rows, but if it
+        # hasn't fired (e.g. migration timing) the save would silently fail
+        # with a plain UPDATE, leaving the shared board empty.
+        upsert_data = {"trip_id": trip_id, **update_data}
+        response = self.client.table("canvas_states").upsert(
+            upsert_data, on_conflict="trip_id"
+        ).execute()
         return response.data[0] if response.data else {}
 
     # ================================================
