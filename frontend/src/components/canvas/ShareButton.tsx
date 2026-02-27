@@ -24,6 +24,22 @@ export default function ShareButton({ tripId }: ShareButtonProps) {
     }
     setLoading(true)
     try {
+      // Flush the canvas to the DB before generating the share link so the
+      // public view always has the latest content.
+      await new Promise<void>((resolve) => {
+        const onFlushed = () => {
+          window.removeEventListener('canvas-flushed', onFlushed)
+          resolve()
+        }
+        window.addEventListener('canvas-flushed', onFlushed)
+        window.dispatchEvent(new CustomEvent('flush-canvas'))
+        // Safety timeout in case BoardWrapper isn't mounted
+        setTimeout(() => {
+          window.removeEventListener('canvas-flushed', onFlushed)
+          resolve()
+        }, 3000)
+      })
+
       const { share_token } = await shareTrip(tripId)
       const url = `${window.location.origin}/board/${share_token}`
       setShareUrl(url)
