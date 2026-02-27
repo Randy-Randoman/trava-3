@@ -53,7 +53,8 @@ async def board_add_items(
     Args:
         items: JSON string — a list of item objects. Each object should have:
             name (required), type ("stay"/"activity"), price, rating, review_count,
-            distance, url/bookingUrl, image_url/imageUrl
+            distance, url/bookingUrl, image_url/imageUrl.
+            Optional: day (int, e.g. 1), date (str, e.g. "2026-03-17") for day grouping.
     """
     from app.services.database import DatabaseService
     from app.logic.transformer import generate_card_elements
@@ -71,7 +72,7 @@ async def board_add_items(
 
     db = DatabaseService()
 
-    # Read current canvas state
+    # Read current canvas & board state
     canvas = await db.get_canvas_state(trip_id)
     existing_elements = []
     existing_files = {}
@@ -79,18 +80,72 @@ async def board_add_items(
         existing_elements = canvas.get("scene_elements") or []
         existing_files = canvas.get("scene_files") or {}
 
-    # Read current board items
     current_board_items = await db.get_board_items(trip_id)
 
-    # Generate card elements positioned below existing content
+    # ── First-ever add: wipe the canvas clean (removes welcome message) ──
+    first_add = len(current_board_items) == 0
+    if first_add:
+        existing_elements = []
+        existing_files = {}
+
+    # # ── Merge board items: new items replace existing items on the same day ──
+    # incoming_days = {item.get("day") for item in item_list if item.get("day") is not None}
+
+    # # Keep existing board items whose day is NOT being replaced
+    # kept_board_items = []
+    # for bi in current_board_items:
+    #     if bi.get("day") is not None and bi["day"] in incoming_days:
+    #         continue  # This day is being replaced by incoming items
+    #     kept_board_items.append(bi)
+
+    # ── Merge board items: keep all existing items, append new ones ──
+    kept_board_items = list(current_board_items)
+
+
+    # Strip ALL agent-placed elements from canvas (tagged with customData.agentPlaced)
+    # Also strip legacy agent elements by group ID for backwards compat
+    all_agent_group_ids = set()
+    for bi in current_board_items:
+        gid = bi.get("excalidraw_group_id")
+        if gid:
+            all_agent_group_ids.add(gid)
+
+    user_elements = []
+    for el in existing_elements:
+        # Primary: check the agentPlaced tag (set by transformer)
+        if (el.get("customData") or {}).get("agentPlaced"):
+            continue
+        # Fallback: match by group ID for elements created before the tag existed
+        el_group_ids = el.get("groupIds") or []
+        if any(gid in all_agent_group_ids for gid in el_group_ids):
+            continue
+        user_elements.append(el)
+
+    # Build merged item data list from kept board items + new items
+    merged_item_data = []
+    for bi in kept_board_items:
+        # Reconstruct the item dict from board_item data
+        item_data = dict(bi.get("data", {}))
+        item_data.setdefault("name", bi.get("name", "Unnamed"))
+        item_data.setdefault("type", bi.get("type", "stay"))
+        if bi.get("day") is not None:
+            item_data["day"] = bi["day"]
+        if bi.get("date"):
+            item_data["date"] = bi["date"]
+        merged_item_data.append(item_data)
+
+    for item in item_list:
+        merged_item_data.append(item)
+
+    # Regenerate ALL card elements from merged items, positioned below user content
     new_elements, new_files, group_ids = await generate_card_elements(
-        item_list, existing_elements
+        merged_item_data, user_elements
     )
 
-    # Append new elements to existing canvas
-    updated_elements = existing_elements + new_elements
+    # Combine user-drawn elements with regenerated agent elements
+    updated_elements = user_elements + new_elements
 
-    # Merge new files into existing files
+    # Merge files (keep user files, add new agent files)
     updated_files = {**existing_files, **new_files}
 
     # Save updated canvas state
@@ -100,21 +155,22 @@ async def board_add_items(
         scene_files=updated_files,
     )
 
-    # Create BoardItem records for tracking
-    new_board_items = []
-    for i, item in enumerate(item_list):
+    # Create new BoardItem records for ALL merged items (with fresh group IDs from layout)
+    all_board_items = []
+    for i, item_data in enumerate(merged_item_data):
         board_item = {
             "id": _generate_id(),
-            "type": item.get("type", "stay"),
-            "name": item.get("name", "Unnamed"),
+            "type": item_data.get("type", "stay"),
+            "name": item_data.get("name", "Unnamed"),
+            "day": item_data.get("day"),
+            "date": item_data.get("date"),
             "excalidraw_group_id": group_ids[i] if i < len(group_ids) else _generate_id(),
-            "data": item,
+            "data": item_data,
             "added_at": datetime.now(timezone.utc).isoformat(),
         }
-        new_board_items.append(board_item)
+        all_board_items.append(board_item)
 
-    # Save updated board items
-    await db.update_board_items(trip_id, current_board_items + new_board_items)
+    await db.update_board_items(trip_id, all_board_items)
 
     names = [item.get("name", "item") for item in item_list]
     return f"Added {len(item_list)} item(s) to the board: {', '.join(names)}"
@@ -184,7 +240,7 @@ async def board_clear(trip_id: Annotated[str, InjectedState("trip_id")]) -> str:
     if not board_items:
         return "Board is already empty."
 
-    # Collect all group IDs from agent-placed items
+    # Collect all group IDs from agent-placed items (fallback matching)
     group_ids_to_remove = set()
     for bi in board_items:
         gid = bi.get("excalidraw_group_id")
@@ -195,10 +251,15 @@ async def board_clear(trip_id: Annotated[str, InjectedState("trip_id")]) -> str:
     canvas = await db.get_canvas_state(trip_id)
     if canvas and canvas.get("scene_elements"):
         elements = canvas["scene_elements"]
-        filtered = [
-            el for el in elements
-            if not any(gid in (el.get("groupIds") or []) for gid in group_ids_to_remove)
-        ]
+        filtered = []
+        for el in elements:
+            # Primary: check agentPlaced tag
+            if (el.get("customData") or {}).get("agentPlaced"):
+                continue
+            # Fallback: match by group ID
+            if any(gid in group_ids_to_remove for gid in (el.get("groupIds") or [])):
+                continue
+            filtered.append(el)
         await db.update_canvas_state(trip_id, scene_elements=filtered)
 
     count = len(board_items)

@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { ChatInterface } from '@/components/chat'
 import { BoardWrapper } from '@/components/canvas'
+import BudgetPanel from '@/components/canvas/BudgetPanel'
 import { useAuth } from '@/lib/auth'
 import { createTrip } from '@/lib/api'
 
@@ -119,7 +120,10 @@ function HomeContent() {
       {/* Right Panel - Canvas/Board (65%) */}
       <div className="w-[65%] h-full relative bg-white">
         {tripId ? (
-          <BoardWrapper tripId={tripId} />
+          <>
+            <BoardWrapper tripId={tripId} />
+            <BudgetPanel tripId={tripId} />
+          </>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-300 text-lg font-medium uppercase tracking-wider">
             Create a trip to start planning
