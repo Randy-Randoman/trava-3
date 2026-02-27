@@ -31,7 +31,7 @@ playwright install chromium       # Needed for Booking.com scraping
 ```bash
 cd frontend
 npm install
-cp ../.env .env.local             # Frontend needs NEXT_PUBLIC_* vars
+ln -s ../.env .env.local          # Symlink to root .env
 ```
 
 ### Other frontend commands
@@ -43,7 +43,7 @@ npm run lint         # Run linter
 
 ### Environment
 - Root `.env` has all secrets (see `.env.example`)
-- Frontend needs `cp ../.env .env.local` (or symlink) for `NEXT_PUBLIC_*` vars
+- Frontend symlinks `.env.local -> ../.env` (already set up)
 - Backend loads `.env` from project root automatically
 
 ### Database
