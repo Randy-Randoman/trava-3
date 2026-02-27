@@ -20,6 +20,8 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [newTripOpen, setNewTripOpen] = useState(false)
+  const [creatingTrip, setCreatingTrip] = useState(false)
 
   // Fetch trips on mount
   const fetchTrips = useCallback(async () => {
@@ -73,16 +75,24 @@ function DashboardContent() {
   }
 
   // Create new trip
-  const handleNewTrip = async () => {
+  const handleNewTrip = () => {
+    setNewTripOpen(true)
+  }
+
+  const handleCreateTrip = async (title: string) => {
     try {
+      setCreatingTrip(true)
       const data = await createTrip({
-        title: 'New Trip',
+        title,
         destination: null
       })
+      setNewTripOpen(false)
       router.push(`/?trip=${data.id}`)
     } catch (err) {
       alert('Failed to create trip')
       console.error(err)
+    } finally {
+      setCreatingTrip(false)
     }
   }
 
@@ -187,6 +197,15 @@ function DashboardContent() {
           </div>
         )}
       </main>
+
+      {/* New Trip Modal */}
+      {newTripOpen && (
+        <NewTripModal
+          onClose={() => setNewTripOpen(false)}
+          onCreate={handleCreateTrip}
+          creating={creatingTrip}
+        />
+      )}
 
       {/* Feedback Modal */}
       {feedbackOpen && (
@@ -317,6 +336,75 @@ function TripCard({ trip, onOpen, onRename, onDelete, formatDate }: TripCardProp
             }`}>
             {trip.status}
           </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// New Trip Modal Component
+interface NewTripModalProps {
+  onClose: () => void
+  onCreate: (title: string) => void
+  creating: boolean
+}
+
+function NewTripModal({ onClose, onCreate, creating }: NewTripModalProps) {
+  const [title, setTitle] = useState('')
+
+  const handleSubmit = () => {
+    const trimmed = title.trim()
+    if (!trimmed) return
+    onCreate(trimmed)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+
+      {/* Modal */}
+      <div className="relative bg-retro-cream border-4 border-trava-black shadow-[8px_8px_0px_#1A1A1B] w-full max-w-md mx-4">
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b-4 border-trava-black">
+          <h2 className="text-xl font-black uppercase tracking-tight text-trava-black">New Trip</h2>
+          <button
+            onClick={onClose}
+            className="p-1 text-trava-black hover:text-adventure-orange transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-6 h-6">
+              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-5">
+          <label className="block text-sm font-bold text-trava-black uppercase tracking-wide mb-2">
+            Trip Title
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit() }}
+            placeholder="e.g. Summer in Italy"
+            autoFocus
+            maxLength={100}
+            className="w-full bg-white border-2 border-trava-black px-4 py-3 text-sm font-medium text-trava-black placeholder:text-gray-400 focus:outline-none focus:shadow-brutal transition-all"
+          />
+          <div className="flex items-center justify-end mt-4">
+            <button
+              onClick={handleSubmit}
+              disabled={creating || !title.trim()}
+              className="px-6 py-2.5 bg-adventure-orange border-2 border-trava-black text-trava-black font-black text-sm uppercase tracking-wide
+                transition-all hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[4px_4px_0px_#1A1A1B]
+                active:translate-x-[1px] active:translate-y-[1px] active:shadow-none
+                disabled:bg-gray-300 disabled:cursor-not-allowed disabled:border-gray-400 disabled:shadow-none"
+            >
+              {creating ? 'Creating...' : 'Create Trip'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
