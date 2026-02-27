@@ -26,12 +26,16 @@ export default function BudgetPanel({ tripId }: BudgetPanelProps) {
     }
   }, [tripId])
 
-  // Fetch on mount and whenever the canvas is updated by the agent
+  // Fetch on mount and whenever the canvas is updated (by agent or user save)
   useEffect(() => {
     fetchBudget()
-    const handleCanvasUpdated = () => fetchBudget()
-    window.addEventListener('canvas-updated', handleCanvasUpdated)
-    return () => window.removeEventListener('canvas-updated', handleCanvasUpdated)
+    const handleRefresh = () => fetchBudget()
+    window.addEventListener('canvas-updated', handleRefresh)
+    window.addEventListener('canvas-saved', handleRefresh)
+    return () => {
+      window.removeEventListener('canvas-updated', handleRefresh)
+      window.removeEventListener('canvas-saved', handleRefresh)
+    }
   }, [fetchBudget])
 
   // Don't render if there's nothing to show
@@ -63,11 +67,30 @@ export default function BudgetPanel({ tripId }: BudgetPanelProps) {
 
       {!collapsed && (
         <div className="px-3 py-2 space-y-2">
+          {/* Item list */}
+          {data.items.length > 0 && (
+            <ul className="space-y-1 max-h-48 overflow-y-auto">
+              {data.items.map((item, i) => (
+                <li key={i} className="flex items-baseline justify-between text-xs">
+                  <span className="text-gray-700 truncate mr-2">{item.name}</span>
+                  <span className="text-trava-black font-bold whitespace-nowrap">
+                    €{item.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* Divider */}
+          {data.items.length > 0 && (
+            <div className="border-t border-gray-300" />
+          )}
+
           {/* Spent line */}
           <div className="flex items-baseline justify-between">
-            <span className="text-xs text-gray-500 font-medium">Spent</span>
+            <span className="text-xs text-gray-500 font-medium">Total</span>
             <span className={`text-sm font-black ${over ? 'text-red-600' : 'text-trava-black'}`}>
-              ${spent.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              €{spent.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </span>
           </div>
 
@@ -76,7 +99,7 @@ export default function BudgetPanel({ tripId }: BudgetPanelProps) {
             <div className="flex items-baseline justify-between">
               <span className="text-xs text-gray-500 font-medium">Budget</span>
               <span className="text-sm font-black text-trava-black">
-                ${budget.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                €{budget.toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </span>
             </div>
           )}
@@ -94,7 +117,7 @@ export default function BudgetPanel({ tripId }: BudgetPanelProps) {
           {/* Over-budget warning */}
           {over && budget !== null && (
             <p className="text-xs font-bold text-red-600">
-              ${(spent - budget).toLocaleString(undefined, { maximumFractionDigits: 0 })} over budget
+              €{(spent - budget).toLocaleString(undefined, { maximumFractionDigits: 0 })} over budget
             </p>
           )}
         </div>

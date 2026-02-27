@@ -147,6 +147,8 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
 
         await saveCanvasState(tripId, [...elements], filesToSave)
         console.log('🎨 Canvas saved (preserved URL-based files)')
+        // Notify other components (e.g. BudgetPanel) that the canvas changed
+        window.dispatchEvent(new CustomEvent('canvas-saved', { detail: { tripId } }))
       } catch (err) {
         console.error('Failed to save:', err)
       }

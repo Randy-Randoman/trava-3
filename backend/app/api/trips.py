@@ -108,6 +108,27 @@ async def update_canvas(trip_id: str, canvas: CanvasState):
             scene_app_state=canvas.appState
         )
 
+        # Reconcile board_items: remove items whose cards were deleted from the canvas
+        board_items = await db.get_board_items(trip_id)
+        if board_items:
+            # Collect all group IDs still present in the saved elements
+            active_group_ids = set()
+            for el in canvas.elements:
+                if el.get("isDeleted"):
+                    continue
+                for gid in (el.get("groupIds") or []):
+                    active_group_ids.add(gid)
+
+            # Keep only board items whose excalidraw_group_id is still on the canvas
+            reconciled = [
+                bi for bi in board_items
+                if bi.get("excalidraw_group_id") in active_group_ids
+            ]
+            if len(reconciled) != len(board_items):
+                removed = len(board_items) - len(reconciled)
+                print(f"[API] Board reconciliation: removed {removed} orphaned board item(s)")
+                await db.update_board_items(trip_id, reconciled)
+
         # If no existing canvas, the update might return empty
         # In that case, return what was sent
         return CanvasResponse(

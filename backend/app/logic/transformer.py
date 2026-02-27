@@ -235,7 +235,8 @@ def _create_rectangle(
         "boundElements": None,
         "updated": 1,
         "link": validated_link,
-        "locked": False
+        "locked": False,
+        "customData": {"agentPlaced": True}
     }
 
 
@@ -286,7 +287,8 @@ def _create_text(
         "containerId": None,
         "originalText": text,
         "autoResize": True,
-        "lineHeight": LINE_HEIGHT
+        "lineHeight": LINE_HEIGHT,
+        "customData": {"agentPlaced": True}
     }
 
 
@@ -327,7 +329,8 @@ def _create_image(
         "locked": False,
         "fileId": file_id,
         "scale": [1, 1],
-        "status": "saved"
+        "status": "saved",
+        "customData": {"agentPlaced": True}
     }
 
 
@@ -604,7 +607,7 @@ async def generate_excalidraw_scene(
         # Build price text
         price_text = ""
         if flight.get("price"):
-            currency = flight.get("currency", "USD")
+            currency = flight.get("currency", "EUR")
             price_text = f"💰 {currency} {flight.get('price')}"
 
         # Build description
@@ -646,7 +649,7 @@ async def generate_excalidraw_scene(
         # Build price text
         price_text = ""
         if stay.get("price"):
-            currency = stay.get("currency", "USD")
+            currency = stay.get("currency", "EUR")
             price_text = f"💰 {currency} {stay.get('price')}"
             if stay.get("pricePerNight"):
                 price_text += "/night"
@@ -718,7 +721,7 @@ async def generate_excalidraw_scene(
         # Build price text
         price_text = ""
         if activity.get("price"):
-            currency = activity.get("currency", "USD")
+            currency = activity.get("currency", "EUR")
             price_text = f"💰 {currency} {activity.get('price')}"
             if activity.get("priceType"):
                 price_text += f" {activity.get('priceType')}"  # e.g., "/person"
@@ -844,8 +847,11 @@ async def generate_card_elements(
     all_files: Dict[str, Any] = {}
     group_ids_map: Dict[int, str] = {}  # item index -> excalidraw group_id
 
-    for day in sorted_days:
+    # ── Layout: each day is a column (left-to-right), cards stack vertically ──
+    for day_col, day in enumerate(sorted_days):
         indices = day_item_indices[day]
+        col_x = gap + day_col * (column_width + gap)
+        col_y = current_y
 
         # ── Day-section header ──────────────────────────────────────────────
         if has_day_info:
@@ -866,21 +872,18 @@ async def generate_card_elements(
                 header_text = "Unscheduled"
 
             header_el = _create_text(
-                gap,
-                current_y,
+                col_x,
+                col_y,
                 header_text,
-                viewport_width - gap * 2,
+                column_width,
                 font_size=24,
-                group_ids=[],  # unmanaged — not linked to any board item
+                group_ids=[],
             )
             all_elements.append(header_el)
-            header_h = estimate_text_height(header_text, viewport_width - gap * 2, 24)
-            current_y += header_h + gap
+            header_h = estimate_text_height(header_text, column_width, 24)
+            col_y += header_h + gap
 
-        # ── Cards in a horizontal row for this day ──────────────────────────
-        current_x = gap
-        row_max_h = 0.0
-
+        # ── Cards stacked vertically within this day column ─────────────────
         for idx in indices:
             item = items[idx]
             name = item.get("name", "Unnamed")
@@ -905,8 +908,8 @@ async def generate_card_elements(
             price_text = f"💰 {price}" if price else ""
 
             card_elements, card_files, height = await create_card_group(
-                x=current_x,
-                y=current_y,
+                x=col_x,
+                y=col_y,
                 title=name,
                 subtitle=subtitle,
                 description=description,
@@ -925,10 +928,7 @@ async def generate_card_elements(
             all_elements.extend(card_elements)
             all_files.update(card_files)
 
-            current_x += column_width + gap
-            row_max_h = max(row_max_h, height)
-
-        current_y += row_max_h + gap * 2
+            col_y += height + gap
 
     # Return group_ids in original input order
     group_ids = [group_ids_map.get(i, _generate_id()) for i in range(len(items))]
