@@ -15,6 +15,10 @@ async def booking_search(
     checkout: str,
     adults: int = 2,
     rooms: int = 1,
+    property_type: str | None = None,
+    min_review_score: int | None = None,
+    star_rating: int | None = None,
+    sort_by: str | None = None,
 ) -> str:
     """Search Booking.com for hotels. Returns a JSON array of hotel objects that can be passed directly to board_add_items.
 
@@ -24,6 +28,10 @@ async def booking_search(
         checkout: Check-out date in YYYY-MM-DD format
         adults: Number of adults (default 2)
         rooms: Number of rooms (default 1)
+        property_type: Filter by type — one of: hotel, apartment, hostel, resort, villa, guesthouse, boutique
+        min_review_score: Minimum guest review score (6, 7, 8, or 9 out of 10)
+        star_rating: Hotel star rating (1-5)
+        sort_by: Sort results — one of: price, rating, distance, best_value
     """
     params = SearchParams(
         destination=destination,
@@ -31,6 +39,10 @@ async def booking_search(
         checkout=checkout,
         adults=adults,
         rooms=rooms,
+        property_type=property_type,
+        min_review_score=min_review_score,
+        star_rating=star_rating,
+        sort_by=sort_by,
     )
 
     cj_pid = os.getenv("CJ_PID", "")

@@ -11,7 +11,7 @@
 
 import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getCanvasState, saveCanvasState } from '@/lib/api'
+import { getCanvasState, saveCanvasState, uploadCanvasImage } from '@/lib/api'
 import { useExcalidrawHydration } from '@/lib/hooks'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -112,6 +112,57 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
     }
   }, [tripId, loadCanvas])
 
+  /**
+   * Upload any new user-added images (base64 data URLs) to Supabase Storage,
+   * then return a files dict with public URLs instead of base64.
+   */
+  const uploadNewFiles = async (
+    currentTripId: string,
+    excalidrawFiles: Record<string, any> | null,
+    originalFiles: Record<string, unknown>
+  ): Promise<Record<string, unknown>> => {
+    const filesToSave: Record<string, unknown> = {}
+
+    // Keep all original files (already have URLs)
+    for (const [id, file] of Object.entries(originalFiles)) {
+      filesToSave[id] = file
+    }
+
+    if (!excalidrawFiles) return filesToSave
+
+    // Find new files not in the original set
+    const newEntries = Object.entries(excalidrawFiles).filter(([id]) => !originalFiles[id])
+
+    // Upload each new file to Supabase Storage
+    await Promise.all(
+      newEntries.map(async ([id, file]: [string, any]) => {
+        const dataUrl: string = file?.dataURL || ''
+        if (dataUrl.startsWith('data:')) {
+          const publicUrl = await uploadCanvasImage(currentTripId, id, dataUrl)
+          if (publicUrl) {
+            // Store with public URL instead of base64
+            filesToSave[id] = {
+              id,
+              mimeType: file.mimeType || 'image/png',
+              dataURL: publicUrl,
+              created: file.created || Date.now(),
+            }
+            // Track as "original" so we don't re-upload on next save
+            originalFilesRef.current[id] = filesToSave[id]
+          } else {
+            // Upload failed — still save the base64 as fallback
+            filesToSave[id] = file
+          }
+        } else {
+          // Non-data URL (already an http url or something else)
+          filesToSave[id] = file
+        }
+      })
+    )
+
+    return filesToSave
+  }
+
   // Listen for flush-canvas events (fired by ShareButton before generating share link)
   // to ensure the latest canvas state is persisted before anyone opens the share URL.
   useEffect(() => {
@@ -128,18 +179,7 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
       try {
         const elements = api.getSceneElements()
         const files = api.getFiles()
-        const originalFiles = originalFilesRef.current
-        const filesToSave: Record<string, unknown> = {}
-        for (const [id, file] of Object.entries(originalFiles)) {
-          filesToSave[id] = file
-        }
-        if (files) {
-          for (const [id, file] of Object.entries(files)) {
-            if (!originalFiles[id]) {
-              filesToSave[id] = file
-            }
-          }
-        }
+        const filesToSave = await uploadNewFiles(tripId, files, originalFilesRef.current)
 
         await saveCanvasState(tripId, [...elements], filesToSave)
         console.log('[BoardWrapper] Canvas flushed for share')
@@ -170,28 +210,11 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
 
     saveTimeoutRef.current = setTimeout(async () => {
       try {
-        // IMPORTANT: Preserve original files with URLs, not the hydrated base64 data
-        // Merge: keep original URL-based files, but add any new user-added files
-        const originalFiles = originalFilesRef.current
-        const filesToSave: Record<string, unknown> = {}
-
-        // First, copy all original files (these have the URLs we want to keep)
-        for (const [id, file] of Object.entries(originalFiles)) {
-          filesToSave[id] = file
-        }
-
-        // Then, add any NEW files that weren't in the original set
-        // (these would be files the user added manually)
-        if (files) {
-          for (const [id, file] of Object.entries(files)) {
-            if (!originalFiles[id]) {
-              filesToSave[id] = file
-            }
-          }
-        }
+        // Upload new user images to Supabase Storage, keep original URL-based files
+        const filesToSave = await uploadNewFiles(tripId, files, originalFilesRef.current)
 
         await saveCanvasState(tripId, [...elements], filesToSave)
-        console.log('🎨 Canvas saved (preserved URL-based files)')
+        console.log('🎨 Canvas saved (images uploaded to storage)')
         // Notify other components (e.g. BudgetPanel) that the canvas changed
         window.dispatchEvent(new CustomEvent('canvas-saved', { detail: { tripId } }))
       } catch (err) {
@@ -227,11 +250,15 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
         UIOptions={{
           canvasActions: {
             export: { saveFileToDisk: true },
-            loadScene: true,
+            loadScene: false,
             clearCanvas: true,
             changeViewBackgroundColor: true,
           },
+          tools: {
+            image: false,
+          },
         }}
+        renderTopRightUI={() => null}
       />
     </div>
   )

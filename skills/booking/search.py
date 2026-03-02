@@ -7,6 +7,25 @@ from .deeplink import build_affiliate_url
 
 logger = logging.getLogger(__name__)
 
+# Booking.com property-type IDs (ht_id in nflt param)
+PROPERTY_TYPE_MAP: dict[str, str] = {
+    "hotel": "204",
+    "apartment": "201",
+    "hostel": "203",
+    "resort": "206",
+    "villa": "208",
+    "guesthouse": "216",
+    "boutique": "228",
+}
+
+# Booking.com sort-order values (order= URL param)
+SORT_MAP: dict[str, str] = {
+    "price": "price",
+    "rating": "score",
+    "distance": "distance_from_search",
+    "best_value": "bayesian_review_score",
+}
+
 
 async def search_booking(
     params: SearchParams, cj_pid: str = "", cj_aid: str = ""
@@ -15,6 +34,7 @@ async def search_booking(
     # Lazy import: app.services is only on sys.path when the backend is running
     from app.services.playwright import get_page
 
+    # --- Build base URL ---
     url = (
         f"https://www.booking.com/searchresults.html"
         f"?ss={quote(params.destination)}"
@@ -25,6 +45,28 @@ async def search_booking(
         f"&selected_currency=EUR"
         f"&lang=en-us"
     )
+
+    # --- Append vibe / preference filters ---
+    nflt_parts: list[str] = []
+
+    if params.property_type:
+        ht_id = PROPERTY_TYPE_MAP.get(params.property_type.lower())
+        if ht_id:
+            nflt_parts.append(f"ht_id={ht_id}")
+
+    if params.min_review_score and 6 <= params.min_review_score <= 9:
+        nflt_parts.append(f"review_score={params.min_review_score * 10}")
+
+    if params.star_rating and 1 <= params.star_rating <= 5:
+        nflt_parts.append(f"class={params.star_rating}")
+
+    if nflt_parts:
+        url += f"&nflt={quote(';'.join(nflt_parts))}"
+
+    if params.sort_by:
+        order = SORT_MAP.get(params.sort_by.lower())
+        if order:
+            url += f"&order={order}"
 
     logger.info(f"Booking search URL: {url}")
 

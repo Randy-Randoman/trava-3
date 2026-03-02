@@ -133,6 +133,16 @@ body {
   box-shadow: 6px 6px 0px #1A1A1B !important;
 }
 
+/* Hide hamburger menu and library button */
+.excalidraw .main-menu-trigger,
+.excalidraw .sidebar-trigger,
+.excalidraw .MainMenu-trigger,
+.excalidraw .layer-ui__library-button,
+.excalidraw [data-testid="library-button"],
+.excalidraw [data-testid="main-menu-trigger"] {
+  display: none !important;
+}
+
 /* Sidebar */
 .excalidraw .sidebar {
   border-left: 3px solid #1A1A1B !important;
