@@ -41,6 +41,20 @@ npm run build        # Production build
 npm run lint         # Run linter
 ```
 
+### Run tests
+```bash
+# All unit tests (from project root, venv must be active)
+python -m pytest tests/unit/ -v
+
+# Specific test file
+python -m pytest tests/unit/test_url_builder.py -v
+
+# With short summary
+python -m pytest tests/unit/ --tb=short
+```
+
+Config: `pytest.ini` at project root. Tests live in `tests/unit/`. Skills are on `pythonpath` via pytest config.
+
 ### Environment
 - Root `.env` has all secrets (see `.env.example`)
 - Frontend symlinks `.env.local -> ../.env` (already set up)
