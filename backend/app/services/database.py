@@ -84,7 +84,7 @@ class DatabaseService:
         return response.data if response.data else []
 
     async def get_user_trips_with_thumbnails(self, user_id: str) -> List[Dict[str, Any]]:
-        """Get all trips for a user with thumbnail images from canvas state"""
+        """Get all trips for a user with thumbnail images from canvas state or board items"""
         print(f"[DB] get_user_trips_with_thumbnails({user_id})")
 
         # Get trips with their canvas states in one query
@@ -94,10 +94,14 @@ class DatabaseService:
 
         trips = response.data if response.data else []
 
-        # Extract first image URL from each trip's canvas state
+        # Extract first image URL from each trip's canvas state or board items
         for trip in trips:
             thumbnail_url = None
             canvas_state = trip.pop("canvas_states", None)
+
+            # Supabase may return the relation as a list or a dict
+            if isinstance(canvas_state, list) and canvas_state:
+                canvas_state = canvas_state[0]
 
             if canvas_state and isinstance(canvas_state, dict):
                 scene_files = canvas_state.get("scene_files", {})
@@ -106,14 +110,23 @@ class DatabaseService:
                     for file_id, file_data in scene_files.items():
                         if isinstance(file_data, dict):
                             data_url = file_data.get("dataURL", "")
-                            # Check if it's a URL (not a base64 data URL)
+                            # Prefer HTTP URLs (easier to proxy/display)
                             if data_url.startswith("http"):
                                 thumbnail_url = data_url
                                 break
                             elif data_url.startswith("data:image"):
-                                # It's a base64 image, use it
                                 thumbnail_url = data_url
                                 break
+
+            # Fallback: extract image URL from board_items data
+            if not thumbnail_url:
+                board_items = trip.get("board_items") or []
+                for item in board_items:
+                    data = item.get("data", {})
+                    img = data.get("image_url") or data.get("imageUrl") or data.get("image")
+                    if img and isinstance(img, str) and img.startswith("http"):
+                        thumbnail_url = img
+                        break
 
             trip["thumbnail_url"] = thumbnail_url
 

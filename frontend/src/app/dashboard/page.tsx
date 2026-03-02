@@ -22,6 +22,7 @@ function DashboardContent() {
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [newTripOpen, setNewTripOpen] = useState(false)
   const [creatingTrip, setCreatingTrip] = useState(false)
+  const [renameTarget, setRenameTarget] = useState<{ id: string; title: string } | null>(null)
 
   // Fetch trips on mount
   const fetchTrips = useCallback(async () => {
@@ -56,16 +57,20 @@ function DashboardContent() {
   }
 
   // Handle rename
-  const handleRename = async (tripId: string, currentTitle: string) => {
-    const newTitle = prompt('Rename trip:', currentTitle)
-    if (!newTitle || newTitle === currentTitle) return
+  const handleRename = async (newTitle: string) => {
+    if (!renameTarget || !newTitle || newTitle === renameTarget.title) {
+      setRenameTarget(null)
+      return
+    }
 
     try {
-      await updateTrip(tripId, { title: newTitle })
-      setTrips(trips.map(t => t.id === tripId ? { ...t, title: newTitle } : t))
+      await updateTrip(renameTarget.id, { title: newTitle })
+      setTrips(trips.map(t => t.id === renameTarget.id ? { ...t, title: newTitle } : t))
     } catch (err) {
       alert('Failed to rename trip')
       console.error(err)
+    } finally {
+      setRenameTarget(null)
     }
   }
 
@@ -189,7 +194,7 @@ function DashboardContent() {
                 key={trip.id}
                 trip={trip}
                 onOpen={() => handleOpen(trip.id)}
-                onRename={() => handleRename(trip.id, trip.title)}
+                onRename={() => setRenameTarget({ id: trip.id, title: trip.title })}
                 onDelete={() => handleDelete(trip.id, trip.title)}
                 formatDate={formatDate}
               />
@@ -204,6 +209,15 @@ function DashboardContent() {
           onClose={() => setNewTripOpen(false)}
           onCreate={handleCreateTrip}
           creating={creatingTrip}
+        />
+      )}
+
+      {/* Rename Trip Modal */}
+      {renameTarget && (
+        <RenameModal
+          currentTitle={renameTarget.title}
+          onClose={() => setRenameTarget(null)}
+          onRename={handleRename}
         />
       )}
 
@@ -241,7 +255,7 @@ function TripCard({ trip, onOpen, onRename, onDelete, formatDate }: TripCardProp
   const imageSrc = getImageSrc(trip.thumbnail_url)
 
   return (
-    <div className="bg-white border-4 border-trava-black brutal-shadow hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[6px_6px_0px_#1A1A1B] transition-all relative group">
+    <div className={`bg-white border-4 border-trava-black brutal-shadow hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[6px_6px_0px_#1A1A1B] transition-all relative group ${menuOpen ? 'z-30' : ''}`}>
       {/* Thumbnail/Preview */}
       <div
         className="h-32 bg-trava-teal border-b-4 border-trava-black flex items-center justify-center cursor-pointer overflow-hidden p-2"
@@ -336,6 +350,81 @@ function TripCard({ trip, onOpen, onRename, onDelete, formatDate }: TripCardProp
             }`}>
             {trip.status}
           </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Rename Trip Modal Component
+interface RenameModalProps {
+  currentTitle: string
+  onClose: () => void
+  onRename: (newTitle: string) => void
+}
+
+function RenameModal({ currentTitle, onClose, onRename }: RenameModalProps) {
+  const [title, setTitle] = useState(currentTitle)
+
+  const handleSubmit = () => {
+    const trimmed = title.trim()
+    if (!trimmed) return
+    onRename(trimmed)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+
+      {/* Modal */}
+      <div className="relative bg-retro-cream border-4 border-trava-black shadow-[8px_8px_0px_#1A1A1B] w-full max-w-md mx-4">
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b-4 border-trava-black">
+          <h2 className="text-xl font-black uppercase tracking-tight text-trava-black">Rename Trip</h2>
+          <button
+            onClick={onClose}
+            className="p-1 text-trava-black hover:text-adventure-orange transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-6 h-6">
+              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-5">
+          <label className="block text-sm font-bold text-trava-black uppercase tracking-wide mb-2">
+            Trip Title
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit() }}
+            autoFocus
+            maxLength={100}
+            className="w-full bg-white border-2 border-trava-black px-4 py-3 text-sm font-medium text-trava-black placeholder:text-gray-400 focus:outline-none focus:shadow-brutal transition-all"
+          />
+          <div className="flex items-center justify-end gap-3 mt-4">
+            <button
+              onClick={onClose}
+              className="px-5 py-2.5 border-2 border-trava-black text-trava-black font-black text-sm uppercase tracking-wide
+                transition-all hover:bg-gray-100"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={!title.trim() || title.trim() === currentTitle}
+              className="px-6 py-2.5 bg-adventure-orange border-2 border-trava-black text-trava-black font-black text-sm uppercase tracking-wide
+                transition-all hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[4px_4px_0px_#1A1A1B]
+                active:translate-x-[1px] active:translate-y-[1px] active:shadow-none
+                disabled:bg-gray-300 disabled:cursor-not-allowed disabled:border-gray-400 disabled:shadow-none"
+            >
+              Rename
+            </button>
+          </div>
         </div>
       </div>
     </div>

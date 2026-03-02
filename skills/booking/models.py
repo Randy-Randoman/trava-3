@@ -10,6 +10,11 @@ class SearchParams(BaseModel):
     checkout: str      # YYYY-MM-DD
     adults: int = 2
     rooms: int = 1
+    # Vibe / preference filters
+    property_type: Optional[str] = None   # hotel, apartment, hostel, resort, villa, guesthouse, boutique
+    min_review_score: Optional[int] = None  # 6, 7, 8, or 9 (maps to Booking.com's 60-90 scale)
+    star_rating: Optional[int] = None     # 1-5
+    sort_by: Optional[str] = None         # price, rating, distance, best_value
 
 
 class Hotel(BaseModel):

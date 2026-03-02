@@ -5,6 +5,7 @@
 import { supabase } from './supabase/client'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 
 /**
  * Get auth headers with user ID
@@ -259,4 +260,65 @@ export async function getPublicBoard(shareToken: string): Promise<PublicBoardRes
     throw new Error(`Board not found`)
   }
   return response.json()
+}
+
+/**
+ * Canvas Image Upload (Supabase Storage)
+ *
+ * Uploads a user-added image (base64 data URL) to Supabase Storage
+ * and returns the public URL to store in scene_files instead of the base64.
+ */
+
+/** Convert a base64 data URL to a Blob */
+function dataUrlToBlob(dataUrl: string): { blob: Blob; mimeType: string; ext: string } {
+  const [header, base64] = dataUrl.split(',')
+  const mimeType = header.match(/:(.*?);/)?.[1] || 'image/png'
+  const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'png'
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return { blob: new Blob([bytes], { type: mimeType }), mimeType, ext }
+}
+
+/** Max file size for user uploads (5 MB) */
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
+
+/**
+ * Upload a single canvas image to Supabase Storage.
+ * Returns the public URL on success, or null on failure.
+ */
+export async function uploadCanvasImage(
+  tripId: string,
+  fileId: string,
+  dataUrl: string
+): Promise<string | null> {
+  try {
+    const { blob, mimeType, ext } = dataUrlToBlob(dataUrl)
+
+    if (blob.size > MAX_IMAGE_SIZE_BYTES) {
+      console.warn(`[Upload] File ${fileId} exceeds 5 MB limit (${(blob.size / 1024 / 1024).toFixed(1)} MB), skipping`)
+      return null
+    }
+
+    const path = `${tripId}/${fileId}.${ext}`
+
+    const { error } = await supabase.storage
+      .from('canvas-images')
+      .upload(path, blob, { contentType: mimeType, upsert: true })
+
+    if (error) {
+      console.error(`[Upload] Failed to upload ${fileId}:`, error.message)
+      return null
+    }
+
+    // Build public URL
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/canvas-images/${path}`
+    console.log(`[Upload] Uploaded ${fileId} → ${publicUrl}`)
+    return publicUrl
+  } catch (err) {
+    console.error(`[Upload] Error uploading ${fileId}:`, err)
+    return null
+  }
 }

@@ -381,11 +381,24 @@ async def delete_trip(trip_id: str):
     """
     DELETE /trips/{id}
 
-    Delete a trip and its canvas state
+    Delete a trip, its canvas state, and any uploaded images from storage
     """
     print(f"[API] DELETE /trips/{trip_id}")
 
     try:
+        # Clean up uploaded images from Supabase Storage
+        try:
+            storage = db.client.storage.from_("canvas-images")
+            file_list = storage.list(trip_id)
+            if file_list:
+                paths = [f"{trip_id}/{f['name']}" for f in file_list]
+                if paths:
+                    storage.remove(paths)
+                    print(f"[API] Deleted {len(paths)} image(s) from storage for trip {trip_id}")
+        except Exception as storage_err:
+            # Don't fail the whole delete if storage cleanup fails
+            print(f"[API] Warning: storage cleanup failed for trip {trip_id}: {storage_err}")
+
         success = await db.delete_trip(trip_id)
 
         if not success:
