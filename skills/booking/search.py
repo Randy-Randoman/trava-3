@@ -27,14 +27,8 @@ SORT_MAP: dict[str, str] = {
 }
 
 
-async def search_booking(
-    params: SearchParams, cj_pid: str = "", cj_aid: str = ""
-) -> list[Hotel]:
-    """Search Booking.com and return hotel results."""
-    # Lazy import: app.services is only on sys.path when the backend is running
-    from app.services.playwright import get_page
-
-    # --- Build base URL ---
+def build_search_url(params: SearchParams) -> str:
+    """Build a Booking.com search URL from SearchParams. Pure function, no side effects."""
     url = (
         f"https://www.booking.com/searchresults.html"
         f"?ss={quote(params.destination)}"
@@ -68,6 +62,54 @@ async def search_booking(
         if order:
             url += f"&order={order}"
 
+    return url
+
+
+def clean_hotel_url(raw_url: str | None) -> str | None:
+    """Clean a raw Booking.com hotel URL: skip search redirects, strip session params.
+
+    Returns the clean URL or None if the URL should be skipped.
+    """
+    if not raw_url:
+        return None
+
+    # Skip non-hotel URLs (Booking.com gives /searchresults.html
+    # links for closed/unavailable hotels — these are dead links).
+    # Note: don't match on full URL — every hotel URL has
+    # &from=searchresults in its query string.
+    if "/searchresults" in urlparse(raw_url).path:
+        return None
+
+    # Prepend domain for relative URLs
+    if raw_url.startswith("/"):
+        raw_url = f"https://www.booking.com{raw_url}"
+
+    # Strip session params (aid, sid, label) — they're bound to
+    # Playwright's session and break outside it
+    parsed = urlparse(raw_url)
+    return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+
+
+def append_booking_params(hotel_url: str, params: SearchParams) -> str:
+    """Append checkin/checkout/adults/rooms params to a clean hotel URL."""
+    separator = "&" if "?" in hotel_url else "?"
+    booking_params = urlencode({
+        "checkin": params.checkin,
+        "checkout": params.checkout,
+        "group_adults": params.adults,
+        "no_rooms": params.rooms,
+    })
+    return f"{hotel_url}{separator}{booking_params}"
+
+
+async def search_booking(
+    params: SearchParams, cj_pid: str = "", cj_aid: str = ""
+) -> list[Hotel]:
+    """Search Booking.com and return hotel results."""
+    # Lazy import: app.services is only on sys.path when the backend is running
+    from app.services.playwright import get_page
+
+    url = build_search_url(params)
     logger.info(f"Booking search URL: {url}")
 
     hotels = []
@@ -111,22 +153,10 @@ async def search_booking(
                     await link_el.get_attribute("href") if link_el else None
                 )
                 logger.debug(f"  [{name}] link_el={'found' if link_el else 'MISSING'}, raw_url={raw_url!r}")
-                # Skip non-hotel URLs (Booking.com gives /searchresults.html
-                # links for closed/unavailable hotels — these are dead links).
-                # Note: don't match on full URL — every hotel URL has
-                # &from=searchresults in its query string.
-                if raw_url and "/searchresults" in urlparse(raw_url).path:
+
+                hotel_url = clean_hotel_url(raw_url)
+                if raw_url and hotel_url is None:
                     logger.info(f"Skipping '{name}' — URL is a searchresults redirect")
-                    hotel_url = None
-                elif raw_url:
-                    # Strip session params (aid, sid, label) — they're bound to
-                    # Playwright's session and break outside it
-                    if raw_url.startswith("/"):
-                        raw_url = f"https://www.booking.com{raw_url}"
-                    parsed = urlparse(raw_url)
-                    hotel_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
-                else:
-                    hotel_url = None
 
                 # Get image (try src first, then data-src for lazy-loaded images)
                 img_el = await card.query_selector('img[data-testid="image"]')
@@ -144,14 +174,7 @@ async def search_booking(
 
                 # Add booking params so hotel page shows correct dates/availability
                 if hotel_url:
-                    separator = "&" if "?" in hotel_url else "?"
-                    booking_params = urlencode({
-                        "checkin": params.checkin,
-                        "checkout": params.checkout,
-                        "group_adults": params.adults,
-                        "no_rooms": params.rooms,
-                    })
-                    parameterized_url = f"{hotel_url}{separator}{booking_params}"
+                    parameterized_url = append_booking_params(hotel_url, params)
                 else:
                     parameterized_url = None
 
