@@ -128,7 +128,20 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 
 ### Known issues
 
-- **Skill testing UX.** Need a better way to test skills — possibly via Claude Code integration or a simpler workflow.
+- ~~**Skill testing UX.** Need a better way to test skills — possibly via Claude Code integration or a simpler workflow.~~ → Resolved: unit tests added (see below).
+
+### Unit Tests Added
+
+| What was done | Status |
+|---------------|--------|
+| Extracted `build_search_url()`, `clean_hotel_url()`, `append_booking_params()` from `search.py` into standalone pure functions | ✅ |
+| `tests/unit/test_deeplink.py` — 6 tests for CJ affiliate link generation (with/without credentials, URL encoding) | ✅ |
+| `tests/unit/test_models.py` — 7 tests for SearchParams/Hotel Pydantic models (defaults, validation, edge cases) | ✅ |
+| `tests/unit/test_url_builder.py` — 16 tests for Booking.com search URL construction (filters, sort, encoding, case insensitivity) | ✅ |
+| `tests/unit/test_url_cleaning.py` — 13 tests for URL cleaning + booking param appending (searchresults bug regression, session param stripping) | ✅ |
+| `pytest.ini` + `tests/conftest.py` with shared fixtures and dummy env vars | ✅ |
+| pytest + pytest-asyncio added to `requirements.txt` | ✅ |
+| **42 tests, all passing in ~0.2s** | ✅ |
 
 ### Bugs fixed after initial Phase 5
 

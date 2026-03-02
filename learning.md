@@ -237,3 +237,7 @@ Lessons from building trava-3 (useful for future skills and phases):
 9. **Be careful with substring URL filters.** `"searchresults" in raw_url` was intended to catch closed-hotel redirect URLs (`/searchresults.html?closed_msg=...`) but matched ALL hotel URLs because Booking.com appends `&from=searchresults` to every href. Fix: check the URL **path** only (`"/searchresults" in urlparse(raw_url).path`). This was the root cause of the "only 1 hotel" bug.
 
 10. **Always set `&lang=en-us` in Booking.com scraper URL.** Without it, Booking.com auto-detects locale from the server's IP/headers, returning Portuguese text ("Pontuado com 7,9" instead of "Scored 7.9"). Explicit locale ensures consistent English output.
+
+11. **Extract pure functions for testability.** `search.py` had URL building, URL cleaning, and booking param logic all inline inside `search_booking()`. Extracting them into `build_search_url()`, `clean_hotel_url()`, and `append_booking_params()` made them independently testable — and the "only 1 hotel" bug (#9 above) now has a regression test. Pattern: if logic doesn't need I/O, pull it into a pure function.
+
+12. **pytest.ini `pythonpath = .` is key for skill tests.** Skills live at the project root (`skills/`), not inside `backend/`. Setting `pythonpath = .` in pytest.ini lets `from skills.booking.search import ...` work from the project root without sys.path hacks.
