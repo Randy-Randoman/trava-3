@@ -1,0 +1,18 @@
+# Frontend Environment Variables
+# Copy this file to .env.local and fill in your actual values
+
+# Supabase Configuration
+# IMPORTANT: Frontend uses ANON key (safe to expose in browser)
+# Do NOT use SUPABASE_SERVICE_KEY in frontend - that's backend-only!
+NEXT_PUBLIC_SUPABASE_URL=https://etnpdhfpqkthchlyukor.supabase.co/
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_rJPBZTAvLmAkKtxrgMK2YQ_DFZRzk-8
+
+# Backend API URL
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+
+# Where to find these values:
+# 1. Go to your Supabase project dashboard
+# 2. Navigate to Settings → API
+# 3. Copy "Project URL" → NEXT_PUBLIC_SUPABASE_URL
+# 4. Copy "anon public" key → NEXT_PUBLIC_SUPABASE_ANON_KEY
+#    (NOT the service_role key - that's for backend only!)
