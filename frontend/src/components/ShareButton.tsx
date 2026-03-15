@@ -39,7 +39,20 @@ export default function ShareButton({ tripId }: ShareButtonProps) {
 
       // 4. Build share URL and copy to clipboard
       const shareUrl = `${window.location.origin}/board/${share_token}`
-      await navigator.clipboard.writeText(shareUrl)
+      try {
+        await navigator.clipboard.writeText(shareUrl)
+      } catch {
+        // Clipboard API fails after async delays (user-gesture expires).
+        // Fallback: temporary textarea + execCommand.
+        const ta = document.createElement('textarea')
+        ta.value = shareUrl
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      }
 
       // 5. Show "Copied!" confirmation
       setState('copied')
