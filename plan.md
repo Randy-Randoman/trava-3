@@ -176,7 +176,66 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 
 ---
 
-## Phase 7: Better Board UX — NEXT
+## Phase 7: Sign-Up Flow — IN PROGRESS
+
+**Goal:** Users can sign up, confirm email, and wait for manual approval before accessing the app.
+
+**Flow:** Sign Up → Email Confirmation → Auth Callback → Pending Approval → Dashboard
+
+### Done
+
+| # | Task | Details | Status |
+|---|------|---------|--------|
+| 1 | Install `@supabase/ssr`, create server client | `frontend/src/lib/supabase/server.ts` — cookie-based server client | ✅ |
+| 2 | Add `signUp` to AuthContext | `signUp(email, password, fullName)` with `full_name` in `options.data` | ✅ |
+| 3 | `/signup` page | Form: Full Name, Email, Password. Brutalist styling. Success: "Check your email" message | ✅ |
+| 4 | Cross-links login ↔ signup | Both pages link to each other | ✅ |
+| 5 | `/auth/callback` route | Exchanges code for session, redirects to `/dashboard` or `/login` | ✅ |
+| 6 | Migration 007: `is_approved` | `backend/migrations/007_user_approval.sql` — **user must run in Supabase SQL Editor** | ✅ (code written) |
+| 7 | `/pending-approval` page | "Account Under Review" + "Check again" + "Sign out" buttons | ✅ |
+| 8 | Approval check in ProtectedRoute | Fetches `is_approved` from profiles, redirects to `/pending-approval` if false | ✅ |
+
+### Issues
+- [#29](https://github.com/Randy-Randoman/trava-3/issues/29) — Sign-up page and AuthContext signUp method (tasks 2-4)
+- [#30](https://github.com/Randy-Randoman/trava-3/issues/30) — Auth callback route with Supabase SSR (tasks 1, 5)
+- [#31](https://github.com/Randy-Randoman/trava-3/issues/31) — User approval gate: migration, pending page, ProtectedRoute check (tasks 6-8)
+
+### Manual steps (user must do — agent cannot)
+These steps require access to the Supabase dashboard or a real browser. The agent writes the code, but these must be done by the user before testing.
+
+1. **Run migration 007** in Supabase SQL Editor — file is at `backend/migrations/007_user_approval.sql`. Copy-paste and run it.
+2. **Configure Resend as SMTP provider** — Supabase dashboard → Authentication → Settings → SMTP. Enable "Custom SMTP" and enter Resend SMTP credentials (host: `smtp.resend.com`, port: 465, user: `resend`, pass: your Resend API key). This makes confirmation emails go through Resend instead of Supabase's built-in (rate-limited) sender.
+3. **Enable email confirmations** — Supabase dashboard → Authentication → Settings → Email. Make sure "Enable email confirmations" is ON so users must verify their email before accessing the app.
+4. **Check Supabase redirect URL** — Supabase dashboard → Authentication → URL Configuration. The "Site URL" should be `http://localhost:3000` and "Redirect URLs" should include `http://localhost:3000/auth/callback`. Without this, the email confirmation link won't work.
+5. **Test the full flow** — sign up with a real email, confirm via Resend email, see pending-approval page, manually approve in DB (`UPDATE profiles SET is_approved = true WHERE id = '...';`), refresh, access dashboard.
+6. **Approve existing users** — any users who signed up before migration 007 will have `is_approved = false` and get locked out. Run: `UPDATE profiles SET is_approved = true;` to approve all existing users.
+
+### Not in this phase
+- Backend JWT validation (see Phase 8)
+
+---
+
+## Phase 8: Backend JWT Validation
+
+**Goal:** Replace `X-User-ID` header with proper Supabase JWT validation. Backend verifies the user's identity instead of trusting a header.
+
+### To do
+
+| # | Task | Details |
+|---|------|---------|
+| 1 | JWT validation dependency | FastAPI dependency that extracts + validates Supabase JWT from `Authorization: Bearer <token>` header |
+| 2 | Extract `user_id` from token | Replace `X-User-ID` header usage across all endpoints with JWT-derived user ID |
+| 3 | Approval check on backend | Check `is_approved` on the profile before allowing access to protected endpoints |
+| 4 | Frontend: send auth token | Ensure all API calls include the Supabase session token in the Authorization header |
+
+### Endpoints to update
+- `POST /chat/{trip_id}` — currently reads `X-User-ID` from header
+- `POST /trips`, `GET /trips`, `GET /trips/latest/id` — currently reads `X-User-ID` from header
+- `POST /feedback` — currently reads `X-User-ID` from header
+
+---
+
+## Phase 9: Better Board UX
 
 **Goal:** The board is worth planning on — not just a card dump, but a real trip planner.
 
@@ -200,7 +259,7 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 
 ---
 
-## Phase 8: Scraping Resilience
+## Phase 10: Scraping Resilience
 
 **Goal:** Booking.com scraping doesn't break silently. Failures are detected, logged, and handled.
 
@@ -220,7 +279,7 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 
 ---
 
-## Phase 9: End-to-End Polish
+## Phase 11: End-to-End Polish
 
 **Goal:** Full flow works reliably. Edge cases handled. Ready for demo.
 
@@ -243,7 +302,7 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 
 - **Flight skill** — Skyscanner via Playwright (same pattern as Booking.com scraper)
 - **Board reconciliation** — detect when user deletes agent-placed cards, sync board_items
-- **Proper auth** — replace X-User-ID header with JWT
+- **Social login** — Google, Apple
 - **Production deploy** — Railway / Vercel
 - **External agent API** — skills as public API (Phase 2 of the big vision)
 
