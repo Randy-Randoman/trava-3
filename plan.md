@@ -252,23 +252,54 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 
 ---
 
-## Phase 9: Backend JWT Validation — NEXT
+## Phase 9: Full Auth Security Pass — NEXT
 
-**Goal:** Replace `X-User-ID` header with proper Supabase JWT validation. Backend verifies the user's identity instead of trusting a header.
+**Goal:** Replace `X-User-ID` header with proper Supabase JWT validation + add trip ownership checks to all endpoints. Backend verifies the user's identity instead of trusting a header. No endpoint exposes another user's data.
+
+### Approach
+
+- **JWT validation:** Decode locally with PyJWT + `SUPABASE_JWT_SECRET` (no network call per request, production-ready)
+- **Auth per-endpoint, not per-router:** Each endpoint explicitly declares `Depends(require_auth)` or not. Prevents accidentally locking out public endpoints like shared boards.
+- **Trip ownership:** Endpoints with `{trip_id}` verify the authenticated user owns the trip (403 if not)
 
 ### To do
 
 | # | Task | Details |
 |---|------|---------|
-| 1 | JWT validation dependency | FastAPI dependency that extracts + validates Supabase JWT from `Authorization: Bearer <token>` header |
-| 2 | Extract `user_id` from token | Replace `X-User-ID` header usage across all endpoints with JWT-derived user ID |
-| 3 | Approval check on backend | Check `is_approved` on the profile before allowing access to protected endpoints |
-| 4 | Frontend: send auth token | Ensure all API calls include the Supabase session token in the Authorization header |
+| 1 | JWT auth dependency | Create `backend/app/core/auth.py` — FastAPI `Depends()` that extracts `Authorization: Bearer <token>`, decodes with PyJWT, returns `user_id`. 401 if missing/invalid. |
+| 2 | Trip ownership helper | `verify_trip_owner(trip_id, user_id)` — loads trip, checks `trip.user_id == user_id`, raises 403 if not. |
+| 3 | Protect user-scoped endpoints | Add `Depends(require_auth)` to: `POST /trips`, `GET /trips`, `GET /trips/latest/id`, `POST /feedback` |
+| 4 | Protect trip-scoped endpoints | Add `Depends(require_auth)` + ownership check to: `GET/PUT /trips/{trip_id}/canvas`, `GET /trips/{trip_id}`, `PATCH /trips/{trip_id}`, `DELETE /trips/{trip_id}`, `GET /trips/{trip_id}/budget`, `POST /trips/{trip_id}/share` |
+| 5 | Protect chat endpoints | Add `Depends(require_auth)` + ownership check to: `POST /chat/stream`, `GET /chat/messages/{trip_id}` |
+| 6 | Frontend: send Bearer token | Change `getAuthHeaders()` in `api.ts` to send `Authorization: Bearer <access_token>` instead of `X-User-ID` |
+| 7 | Frontend: fix chat auth | Add auth headers to `useChat.ts` — both `/chat/stream` and `/chat/messages/{trip_id}` fetches (currently missing) |
+| 8 | Cleanup | Remove `DEFAULT_USER_ID`, `AUTH_ENABLED` flag, `get_user_id()` helper, `X-User-ID` references |
 
-### Endpoints to update
-- `POST /chat/{trip_id}` — currently reads `X-User-ID` from header
-- `POST /trips`, `GET /trips`, `GET /trips/latest/id` — currently reads `X-User-ID` from header
-- `POST /feedback` — currently reads `X-User-ID` from header
+### Endpoints — auth matrix
+
+| Endpoint | Auth | Ownership |
+|----------|------|-----------|
+| `GET /`, `GET /health` | None | None |
+| `GET /trips/public/{share_token}` | None | None |
+| `POST /trips`, `GET /trips`, `GET /trips/latest/id` | JWT → user_id | Scoped by user_id |
+| `POST /feedback` | JWT → user_id | None (standalone) |
+| `GET/PUT /trips/{trip_id}/canvas` | JWT → user_id | verify owner |
+| `GET /trips/{trip_id}` | JWT → user_id | verify owner |
+| `PATCH/DELETE /trips/{trip_id}` | JWT → user_id | verify owner |
+| `GET /trips/{trip_id}/budget` | JWT → user_id | verify owner |
+| `POST /trips/{trip_id}/share` | JWT → user_id | verify owner |
+| `POST /chat/stream` | JWT → user_id | verify owner (via trip_id in body) |
+| `GET /chat/messages/{trip_id}` | JWT → user_id | verify owner |
+
+### Issues
+- [#38](https://github.com/Randy-Randoman/trava-3/issues/38) — JWT auth dependency + trip ownership helper (tasks 1-2)
+- [#39](https://github.com/Randy-Randoman/trava-3/issues/39) — Protect all backend endpoints (tasks 3-5)
+- [#40](https://github.com/Randy-Randoman/trava-3/issues/40) — Frontend: send Bearer token + fix chat auth (tasks 6-7)
+- [#41](https://github.com/Randy-Randoman/trava-3/issues/41) — Cleanup: remove legacy auth code (task 8)
+
+### Manual steps (user must do)
+1. **Get JWT secret** — Supabase dashboard → Settings → API → JWT Secret. Add `SUPABASE_JWT_SECRET=...` to `.env`
+2. **Install PyJWT** — `pip install PyJWT` (will be added to requirements.txt)
 
 ---
 
