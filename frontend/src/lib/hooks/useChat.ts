@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { Message } from '@/types'
+import { supabase } from '@/lib/supabase/client'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
@@ -23,7 +24,12 @@ export function useChat(options: UseChatOptions) {
     const loadMessages = async () => {
       try {
         console.log(`📥 [Chat] Loading messages for trip: ${tripId}`)
-        const response = await fetch(`${BACKEND_URL}/chat/messages/${tripId}`)
+        const { data: { session } } = await supabase.auth.getSession()
+        const headers: Record<string, string> = {}
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`
+        }
+        const response = await fetch(`${BACKEND_URL}/chat/messages/${tripId}`, { headers })
 
         if (!response.ok) {
           // Chat endpoint may not be implemented yet (501) — just start with empty messages
@@ -68,11 +74,16 @@ export function useChat(options: UseChatOptions) {
       console.log(`📝 [Chat] Sending message for trip: ${tripId}`)
 
       // Call the streaming endpoint
+      const { data: { session } } = await supabase.auth.getSession()
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`
+      }
       const response = await fetch(`${BACKEND_URL}/chat/stream`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           trip_id: tripId,  // NEW - send trip_id instead of history
           message: content,

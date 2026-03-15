@@ -252,23 +252,56 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 
 ---
 
-## Phase 9: Backend JWT Validation — NEXT
+## Phase 9: Full Auth Security Pass ✅
 
-**Goal:** Replace `X-User-ID` header with proper Supabase JWT validation. Backend verifies the user's identity instead of trusting a header.
+**Goal:** Replace `X-User-ID` header with proper Supabase JWT validation + add trip ownership checks to all endpoints. Backend verifies the user's identity instead of trusting a header. No endpoint exposes another user's data.
 
-### To do
+### Done
 
-| # | Task | Details |
-|---|------|---------|
-| 1 | JWT validation dependency | FastAPI dependency that extracts + validates Supabase JWT from `Authorization: Bearer <token>` header |
-| 2 | Extract `user_id` from token | Replace `X-User-ID` header usage across all endpoints with JWT-derived user ID |
-| 3 | Approval check on backend | Check `is_approved` on the profile before allowing access to protected endpoints |
-| 4 | Frontend: send auth token | Ensure all API calls include the Supabase session token in the Authorization header |
+| # | Task | Details | Status |
+|---|------|---------|--------|
+| 1 | JWT auth dependency | `backend/app/core/auth.py` — `require_auth` FastAPI dependency, JWKS (ES256) with cached keys, audience validation | ✅ |
+| 2 | Trip ownership helper | `verify_trip_owner(trip_id, user_id)` — 404 if not found, 403 if wrong user, returns trip dict | ✅ |
+| 3 | Protect user-scoped endpoints | `Depends(require_auth)` on: `POST /trips`, `GET /trips`, `GET /trips/latest/id`, `POST /feedback` | ✅ |
+| 4 | Protect trip-scoped endpoints | Auth + ownership on: canvas GET/PUT, trip GET/PATCH/DELETE, budget, share | ✅ |
+| 5 | Protect chat endpoints | Auth + ownership on: `POST /chat/stream`, `GET /chat/messages/{trip_id}` | ✅ |
+| 6 | Frontend: Bearer token | `getAuthHeaders()` sends `Authorization: Bearer <access_token>` | ✅ |
+| 7 | Frontend: chat auth | Auth headers added to both `useChat.ts` fetches (stream + messages) | ✅ |
+| 8 | Cleanup | Removed `DEFAULT_USER_ID`, `AUTH_ENABLED`, `get_user_id()` from config + all backend files | ✅ |
 
-### Endpoints to update
-- `POST /chat/{trip_id}` — currently reads `X-User-ID` from header
-- `POST /trips`, `GET /trips`, `GET /trips/latest/id` — currently reads `X-User-ID` from header
-- `POST /feedback` — currently reads `X-User-ID` from header
+### Tests added
+- `tests/unit/test_auth.py` — 13 tests (require_auth, verify_trip_owner, JWKS caching)
+- `test_share.py` updated for auth dependency override
+- **61 tests total, all passing**
+
+### Bugs fixed during Phase 9
+| What was done | Status |
+|---------------|--------|
+| JWKS URL: Supabase serves JWKS at `/auth/v1/.well-known/jwks.json`, not `/.well-known/jwks.json` | ✅ |
+| Trailing slash in `SUPABASE_URL` env var caused double-slash in JWKS URL — fixed with `rstrip("/")` | ✅ |
+| JWT audience validation: Supabase tokens include `aud: "authenticated"` — added `audience="authenticated"` to decode | ✅ |
+
+### Endpoints — auth matrix
+
+| Endpoint | Auth | Ownership |
+|----------|------|-----------|
+| `GET /`, `GET /health` | None | None |
+| `GET /trips/public/{share_token}` | None | None |
+| `POST /trips`, `GET /trips`, `GET /trips/latest/id` | JWT → user_id | Scoped by user_id |
+| `POST /feedback` | JWT → user_id | None (standalone) |
+| `GET/PUT /trips/{trip_id}/canvas` | JWT → user_id | verify owner |
+| `GET /trips/{trip_id}` | JWT → user_id | verify owner |
+| `PATCH/DELETE /trips/{trip_id}` | JWT → user_id | verify owner |
+| `GET /trips/{trip_id}/budget` | JWT → user_id | verify owner |
+| `POST /trips/{trip_id}/share` | JWT → user_id | verify owner |
+| `POST /chat/stream` | JWT → user_id | verify owner (via trip_id in body) |
+| `GET /chat/messages/{trip_id}` | JWT → user_id | verify owner |
+
+### Issues
+- [#38](https://github.com/Randy-Randoman/trava-3/issues/38) — JWT auth dependency + trip ownership helper (tasks 1-2)
+- [#39](https://github.com/Randy-Randoman/trava-3/issues/39) — Protect all backend endpoints (tasks 3-5)
+- [#40](https://github.com/Randy-Randoman/trava-3/issues/40) — Frontend: send Bearer token + fix chat auth (tasks 6-7)
+- [#41](https://github.com/Randy-Randoman/trava-3/issues/41) — Cleanup: remove legacy auth code (task 8)
 
 ---
 

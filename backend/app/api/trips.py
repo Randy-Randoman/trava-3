@@ -4,23 +4,16 @@ Trips API Endpoints - Save/Load Board State
 
 import re
 import uuid
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Dict, List, Any, Optional
 
 from ..services.database import db
 from ..logic.transformer import generate_excalidraw_scene
 from ..core.templates import generate_welcome_template
+from ..core.auth import require_auth, verify_trip_owner
 
 router = APIRouter()
-
-# Default user UUID (fallback when no auth header provided)
-DEFAULT_USER_ID = "67e4c780-75fe-4c18-8329-2492cedb57cc"
-
-
-def get_user_id(x_user_id: Optional[str] = None) -> str:
-    """Get user ID from header or use default"""
-    return x_user_id if x_user_id else DEFAULT_USER_ID
 
 
 # ================================================
@@ -48,7 +41,7 @@ class CanvasResponse(BaseModel):
 # ================================================
 
 @router.get("/trips/{trip_id}/canvas", response_model=CanvasResponse)
-async def get_canvas(trip_id: str):
+async def get_canvas(trip_id: str, user_id: str = Depends(require_auth)):
     """
     GET /trips/{id}/canvas
 
@@ -58,6 +51,7 @@ async def get_canvas(trip_id: str):
     print(f"[API] GET /trips/{trip_id}/canvas")
 
     try:
+        await verify_trip_owner(trip_id, user_id)
         canvas = await db.get_canvas_state(trip_id)
 
         # If no canvas exists or canvas is empty, return welcome template
@@ -85,7 +79,7 @@ async def get_canvas(trip_id: str):
 
 
 @router.put("/trips/{trip_id}/canvas", response_model=CanvasResponse)
-async def update_canvas(trip_id: str, canvas: CanvasState):
+async def update_canvas(trip_id: str, canvas: CanvasState, user_id: str = Depends(require_auth)):
     """
     PUT /trips/{id}/canvas
 
@@ -95,10 +89,7 @@ async def update_canvas(trip_id: str, canvas: CanvasState):
     print(f"[API] PUT /trips/{trip_id}/canvas - {len(canvas.elements)} elements")
 
     try:
-        # Verify trip exists
-        trip = await db.get_trip(trip_id)
-        if not trip:
-            raise HTTPException(status_code=404, detail="Trip not found")
+        await verify_trip_owner(trip_id, user_id)
 
         # Update canvas state
         result = await db.update_canvas_state(
@@ -166,13 +157,12 @@ class TripResponse(BaseModel):
 
 
 @router.post("/trips", response_model=TripResponse)
-async def create_trip(trip: TripCreate, x_user_id: Optional[str] = Header(None)):
+async def create_trip(trip: TripCreate, user_id: str = Depends(require_auth)):
     """
     POST /trips
 
     Create a new trip for the authenticated user with welcome template
     """
-    user_id = get_user_id(x_user_id)
     print(f"[API] POST /trips - Title: {trip.title}, User: {user_id}")
 
     try:
@@ -213,7 +203,7 @@ async def create_trip(trip: TripCreate, x_user_id: Optional[str] = Header(None))
 
 
 @router.get("/trips/{trip_id}", response_model=TripResponse)
-async def get_trip(trip_id: str):
+async def get_trip(trip_id: str, user_id: str = Depends(require_auth)):
     """
     GET /trips/{id}
 
@@ -222,10 +212,7 @@ async def get_trip(trip_id: str):
     print(f"[API] GET /trips/{trip_id}")
 
     try:
-        trip = await db.get_trip(trip_id)
-
-        if not trip:
-            raise HTTPException(status_code=404, detail="Trip not found")
+        trip = await verify_trip_owner(trip_id, user_id)
 
         return TripResponse(
             id=trip.get("id", ""),
@@ -243,13 +230,12 @@ async def get_trip(trip_id: str):
 
 
 @router.get("/trips/latest/id")
-async def get_latest_trip(x_user_id: Optional[str] = Header(None)):
+async def get_latest_trip(user_id: str = Depends(require_auth)):
     """
     GET /trips/latest/id
 
     Get the most recent trip ID for the user
     """
-    user_id = get_user_id(x_user_id)
     print(f"[API] GET /trips/latest/id - User: {user_id}")
 
     try:
@@ -294,14 +280,13 @@ class TripListResponse(BaseModel):
 
 
 @router.get("/trips", response_model=TripListResponse)
-async def list_trips(x_user_id: Optional[str] = Header(None)):
+async def list_trips(user_id: str = Depends(require_auth)):
     """
     GET /trips
 
     Get all trips for the current user (dashboard view)
     Includes thumbnail images from canvas state
     """
-    user_id = get_user_id(x_user_id)
     print(f"[API] GET /trips - User: {user_id}")
 
     try:
@@ -335,7 +320,7 @@ class TripUpdate(BaseModel):
 
 
 @router.patch("/trips/{trip_id}", response_model=TripResponse)
-async def update_trip(trip_id: str, update: TripUpdate):
+async def update_trip(trip_id: str, update: TripUpdate, user_id: str = Depends(require_auth)):
     """
     PATCH /trips/{id}
 
@@ -344,6 +329,8 @@ async def update_trip(trip_id: str, update: TripUpdate):
     print(f"[API] PATCH /trips/{trip_id}")
 
     try:
+        await verify_trip_owner(trip_id, user_id)
+
         # Build update dict with only provided fields
         update_data = {}
         if update.title is not None:
@@ -377,7 +364,7 @@ async def update_trip(trip_id: str, update: TripUpdate):
 
 
 @router.delete("/trips/{trip_id}")
-async def delete_trip(trip_id: str):
+async def delete_trip(trip_id: str, user_id: str = Depends(require_auth)):
     """
     DELETE /trips/{id}
 
@@ -386,6 +373,7 @@ async def delete_trip(trip_id: str):
     print(f"[API] DELETE /trips/{trip_id}")
 
     try:
+        await verify_trip_owner(trip_id, user_id)
         # Clean up uploaded images from Supabase Storage
         try:
             storage = db.client.storage.from_("canvas-images")
@@ -418,7 +406,7 @@ async def delete_trip(trip_id: str):
 # ================================================
 
 @router.get("/trips/{trip_id}/budget")
-async def get_budget(trip_id: str):
+async def get_budget(trip_id: str, user_id: str = Depends(require_auth)):
     """
     GET /trips/{id}/budget
 
@@ -428,9 +416,7 @@ async def get_budget(trip_id: str):
     print(f"[API] GET /trips/{trip_id}/budget")
 
     try:
-        trip = await db.get_trip(trip_id)
-        if not trip:
-            raise HTTPException(status_code=404, detail="Trip not found")
+        trip = await verify_trip_owner(trip_id, user_id)
 
         budget = trip.get("budget")  # Decimal or None from DB
         board_items = trip.get("board_items") or []
@@ -472,7 +458,7 @@ async def get_budget(trip_id: str):
 # ================================================
 
 @router.post("/trips/{trip_id}/share")
-async def share_trip(trip_id: str):
+async def share_trip(trip_id: str, user_id: str = Depends(require_auth)):
     """
     POST /trips/{id}/share
 
@@ -482,9 +468,7 @@ async def share_trip(trip_id: str):
     print(f"[API] POST /trips/{trip_id}/share")
 
     try:
-        trip = await db.get_trip(trip_id)
-        if not trip:
-            raise HTTPException(status_code=404, detail="Trip not found")
+        trip = await verify_trip_owner(trip_id, user_id)
 
         # Reuse existing token if present, otherwise generate a new one
         share_token = trip.get("share_token") or str(uuid.uuid4())
