@@ -252,28 +252,34 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 
 ---
 
-## Phase 9: Full Auth Security Pass — NEXT
+## Phase 9: Full Auth Security Pass ✅
 
 **Goal:** Replace `X-User-ID` header with proper Supabase JWT validation + add trip ownership checks to all endpoints. Backend verifies the user's identity instead of trusting a header. No endpoint exposes another user's data.
 
-### Approach
+### Done
 
-- **JWT validation:** Decode locally with PyJWT + JWKS endpoint (`SUPABASE_URL/.well-known/jwks.json`). Uses ES256 (ECC P-256) — no shared secret needed, just the existing `SUPABASE_URL`.
-- **Auth per-endpoint, not per-router:** Each endpoint explicitly declares `Depends(require_auth)` or not. Prevents accidentally locking out public endpoints like shared boards.
-- **Trip ownership:** Endpoints with `{trip_id}` verify the authenticated user owns the trip (403 if not)
+| # | Task | Details | Status |
+|---|------|---------|--------|
+| 1 | JWT auth dependency | `backend/app/core/auth.py` — `require_auth` FastAPI dependency, JWKS (ES256) with cached keys, audience validation | ✅ |
+| 2 | Trip ownership helper | `verify_trip_owner(trip_id, user_id)` — 404 if not found, 403 if wrong user, returns trip dict | ✅ |
+| 3 | Protect user-scoped endpoints | `Depends(require_auth)` on: `POST /trips`, `GET /trips`, `GET /trips/latest/id`, `POST /feedback` | ✅ |
+| 4 | Protect trip-scoped endpoints | Auth + ownership on: canvas GET/PUT, trip GET/PATCH/DELETE, budget, share | ✅ |
+| 5 | Protect chat endpoints | Auth + ownership on: `POST /chat/stream`, `GET /chat/messages/{trip_id}` | ✅ |
+| 6 | Frontend: Bearer token | `getAuthHeaders()` sends `Authorization: Bearer <access_token>` | ✅ |
+| 7 | Frontend: chat auth | Auth headers added to both `useChat.ts` fetches (stream + messages) | ✅ |
+| 8 | Cleanup | Removed `DEFAULT_USER_ID`, `AUTH_ENABLED`, `get_user_id()` from config + all backend files | ✅ |
 
-### To do
+### Tests added
+- `tests/unit/test_auth.py` — 13 tests (require_auth, verify_trip_owner, JWKS caching)
+- `test_share.py` updated for auth dependency override
+- **61 tests total, all passing**
 
-| # | Task | Details |
-|---|------|---------|
-| 1 | JWT auth dependency | Create `backend/app/core/auth.py` — FastAPI `Depends()` that extracts `Authorization: Bearer <token>`, verifies via JWKS (ES256), returns `user_id`. 401 if missing/invalid. |
-| 2 | Trip ownership helper | `verify_trip_owner(trip_id, user_id)` — loads trip, checks `trip.user_id == user_id`, raises 403 if not. |
-| 3 | Protect user-scoped endpoints | Add `Depends(require_auth)` to: `POST /trips`, `GET /trips`, `GET /trips/latest/id`, `POST /feedback` |
-| 4 | Protect trip-scoped endpoints | Add `Depends(require_auth)` + ownership check to: `GET/PUT /trips/{trip_id}/canvas`, `GET /trips/{trip_id}`, `PATCH /trips/{trip_id}`, `DELETE /trips/{trip_id}`, `GET /trips/{trip_id}/budget`, `POST /trips/{trip_id}/share` |
-| 5 | Protect chat endpoints | Add `Depends(require_auth)` + ownership check to: `POST /chat/stream`, `GET /chat/messages/{trip_id}` |
-| 6 | Frontend: send Bearer token | Change `getAuthHeaders()` in `api.ts` to send `Authorization: Bearer <access_token>` instead of `X-User-ID` |
-| 7 | Frontend: fix chat auth | Add auth headers to `useChat.ts` — both `/chat/stream` and `/chat/messages/{trip_id}` fetches (currently missing) |
-| 8 | Cleanup | Remove `DEFAULT_USER_ID`, `AUTH_ENABLED` flag, `get_user_id()` helper, `X-User-ID` references |
+### Bugs fixed during Phase 9
+| What was done | Status |
+|---------------|--------|
+| JWKS URL: Supabase serves JWKS at `/auth/v1/.well-known/jwks.json`, not `/.well-known/jwks.json` | ✅ |
+| Trailing slash in `SUPABASE_URL` env var caused double-slash in JWKS URL — fixed with `rstrip("/")` | ✅ |
+| JWT audience validation: Supabase tokens include `aud: "authenticated"` — added `audience="authenticated"` to decode | ✅ |
 
 ### Endpoints — auth matrix
 
@@ -296,20 +302,6 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 - [#39](https://github.com/Randy-Randoman/trava-3/issues/39) — Protect all backend endpoints (tasks 3-5)
 - [#40](https://github.com/Randy-Randoman/trava-3/issues/40) — Frontend: send Bearer token + fix chat auth (tasks 6-7)
 - [#41](https://github.com/Randy-Randoman/trava-3/issues/41) — Cleanup: remove legacy auth code (task 8)
-
-### Manual steps (user must do)
-1. **Install PyJWT** — `pip install PyJWT[crypto]` (will be added to `requirements.txt`). The `[crypto]` extra includes `cryptography` for ES256 support.
-
-### Files to update
-- New: `backend/app/core/auth.py`
-- `backend/app/core/config.py` — remove `AUTH_ENABLED`, `DEFAULT_USER_ID`
-- `backend/app/api/trips.py` — replace `X-User-ID` with `Depends(require_auth)` + ownership
-- `backend/app/api/chat.py` — same
-- `backend/main.py` — same for `/feedback`
-- `backend/requirements.txt` — add PyJWT
-- `frontend/src/lib/api.ts` — `Authorization: Bearer` instead of `X-User-ID`
-- `frontend/src/lib/hooks/useChat.ts` — add auth headers to both fetches
-- `.env.example` — remove `SUPABASE_JWT_SECRET` (no longer needed, uses JWKS via existing `SUPABASE_URL`)
 
 ---
 

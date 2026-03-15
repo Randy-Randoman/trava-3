@@ -3,14 +3,14 @@ Chat API - SSE streaming endpoint using LangGraph agent
 """
 
 import json
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends
 from starlette.responses import StreamingResponse, JSONResponse
 from langchain_core.messages import HumanMessage, AIMessage
 
 from app.models.chat import ChatRequest
 from app.services.database import DatabaseService
 from app.agent.graph import create_agent_graph
-from app.core.config import settings
+from app.core.auth import require_auth, verify_trip_owner
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -39,7 +39,7 @@ def _extract_text(content) -> str:
 
 
 @router.post("/stream")
-async def chat_stream(request: Request, body: ChatRequest):
+async def chat_stream(body: ChatRequest, user_id: str = Depends(require_auth)):
     """
     Stream agent responses via Server-Sent Events.
 
@@ -53,8 +53,7 @@ async def chat_stream(request: Request, body: ChatRequest):
     user_message = body.message
     trip_id = body.trip_id
 
-    # Resolve user_id from header, falling back to default
-    user_id = request.headers.get("X-User-ID") or settings.DEFAULT_USER_ID
+    await verify_trip_owner(trip_id, user_id)
 
     async def event_generator():
         assistant_response = ""
@@ -138,7 +137,7 @@ async def chat_stream(request: Request, body: ChatRequest):
 
 
 @router.get("/messages/{trip_id}")
-async def get_messages(trip_id: str):
+async def get_messages(trip_id: str, user_id: str = Depends(require_auth)):
     """
     Load chat message history for a trip.
 
@@ -146,6 +145,7 @@ async def get_messages(trip_id: str):
     { "messages": [{ "role": "user"|"model", "content": "...", "created_at": "..." }] }
     """
     try:
+        await verify_trip_owner(trip_id, user_id)
         db = DatabaseService()
         conv = await db.get_or_create_conversation(trip_id)
         conversation_id = conv["id"]

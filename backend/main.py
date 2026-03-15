@@ -5,14 +5,13 @@ Run with: uvicorn main:app --reload
 
 import os
 from contextlib import asynccontextmanager
-from typing import Optional
-
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from app.services.playwright import shutdown_playwright, warmup_playwright
+from app.core.auth import require_auth
 
 # Load environment variables from root .env
 load_dotenv(dotenv_path="../.env")
@@ -72,20 +71,15 @@ app.include_router(trips_router, tags=["trips"])
 # Feedback endpoint
 # ================================================
 
-DEFAULT_USER_ID = "67e4c780-75fe-4c18-8329-2492cedb57cc"
-
-
 class FeedbackRequest(BaseModel):
     feedback: str
     username: str = ""
 
 
 @app.post("/feedback")
-async def submit_feedback(body: FeedbackRequest, x_user_id: Optional[str] = Header(None)):
+async def submit_feedback(body: FeedbackRequest, user_id: str = Depends(require_auth)):
     """Accept user feedback and save to database."""
     from app.services.database import db
-
-    user_id = x_user_id or DEFAULT_USER_ID
     try:
         result = await db.save_feedback(user_id, body.username, body.feedback)
         return {"status": "ok", "id": result.get("id", "")}

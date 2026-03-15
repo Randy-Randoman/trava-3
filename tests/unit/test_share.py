@@ -14,22 +14,29 @@ _backend_dir = str(Path(__file__).resolve().parents[2] / "backend")
 if _backend_dir not in sys.path:
     sys.path.insert(0, _backend_dir)
 
+FAKE_USER_ID = "user-00000000-0000-0000-0000-000000000000"
+
 
 @pytest.fixture
 def app():
-    """Create a FastAPI app instance with lifespan disabled."""
+    """Create a FastAPI app instance with lifespan disabled and auth bypassed."""
     from contextlib import asynccontextmanager
 
     from main import app
+    from app.core.auth import require_auth
 
     @asynccontextmanager
     async def _noop_lifespan(app):
         yield
 
+    # Override require_auth to return a fake user_id without JWT validation
+    app.dependency_overrides[require_auth] = lambda: FAKE_USER_ID
+
     original = app.router.lifespan_context
     app.router.lifespan_context = _noop_lifespan
     yield app
     app.router.lifespan_context = original
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -49,10 +56,10 @@ class TestShareTrip:
     @pytest.mark.asyncio
     async def test_share_trip_generates_token(self, client):
         """New share generates a uuid4 token and persists it."""
-        trip_data = {"id": FAKE_TRIP_ID, "title": "Rome Trip", "share_token": None}
+        trip_data = {"id": FAKE_TRIP_ID, "title": "Rome Trip", "share_token": None, "user_id": FAKE_USER_ID}
 
-        with patch("app.api.trips.db") as mock_db:
-            mock_db.get_trip = AsyncMock(return_value=trip_data)
+        with patch("app.api.trips.verify_trip_owner", new_callable=AsyncMock, return_value=trip_data), \
+             patch("app.api.trips.db") as mock_db:
             mock_db.set_share_token = AsyncMock(return_value={})
 
             resp = await client.post(f"/trips/{FAKE_TRIP_ID}/share")
@@ -75,10 +82,11 @@ class TestShareTrip:
             "id": FAKE_TRIP_ID,
             "title": "Rome Trip",
             "share_token": FAKE_SHARE_TOKEN,
+            "user_id": FAKE_USER_ID,
         }
 
-        with patch("app.api.trips.db") as mock_db:
-            mock_db.get_trip = AsyncMock(return_value=trip_data)
+        with patch("app.api.trips.verify_trip_owner", new_callable=AsyncMock, return_value=trip_data), \
+             patch("app.api.trips.db") as mock_db:
             mock_db.set_share_token = AsyncMock(return_value={})
 
             resp = await client.post(f"/trips/{FAKE_TRIP_ID}/share")
@@ -90,8 +98,9 @@ class TestShareTrip:
     @pytest.mark.asyncio
     async def test_share_trip_not_found(self, client):
         """POST /trips/{bad_id}/share returns 404 when trip doesn't exist."""
-        with patch("app.api.trips.db") as mock_db:
-            mock_db.get_trip = AsyncMock(return_value=None)
+        from fastapi import HTTPException
+        with patch("app.api.trips.verify_trip_owner", new_callable=AsyncMock,
+                    side_effect=HTTPException(status_code=404, detail="Trip not found")):
 
             resp = await client.post("/trips/nonexistent-id/share")
 

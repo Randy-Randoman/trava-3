@@ -15,8 +15,8 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   }
-  if (session?.user?.id) {
-    headers['X-User-ID'] = session.user.id
+  if (session?.access_token) {
+    headers['Authorization'] = `Bearer ${session.access_token}`
   }
   return headers
 }

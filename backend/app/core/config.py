@@ -56,8 +56,6 @@ class Settings:
 
     # Application settings
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
-    DEFAULT_USER_ID: str = os.getenv("DEFAULT_USER_ID", "67e4c780-75fe-4c18-8329-2492cedb57cc")
-    AUTH_ENABLED: bool = os.getenv("AUTH_ENABLED", "false").lower() == "true"
 
     # URLs
     BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8000")
