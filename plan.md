@@ -176,7 +176,7 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 
 ---
 
-## Phase 7: Sign-Up Flow — IN PROGRESS
+## Phase 7: Sign-Up Flow ✅
 
 **Goal:** Users can sign up, confirm email, and wait for manual approval before accessing the app.
 
@@ -194,6 +194,13 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 | 6 | Migration 007: `is_approved` | `backend/migrations/007_user_approval.sql` — **user must run in Supabase SQL Editor** | ✅ (code written) |
 | 7 | `/pending-approval` page | "Account Under Review" + "Check again" + "Sign out" buttons | ✅ |
 | 8 | Approval check in ProtectedRoute | Fetches `is_approved` from profiles, redirects to `/pending-approval` if false | ✅ |
+
+### Bugs fixed during Phase 7
+
+| What was done | Status |
+|---------------|--------|
+| Duplicate email signup detection: Supabase returns fake success for existing emails — now checks `identities` array and shows "account already exists" error | ✅ |
+| ProtectedRoute approval check: was letting users through when profile row didn't exist (`undefined !== false`). Fixed to require explicit `is_approved === true` | ✅ |
 
 ### Issues
 - [#29](https://github.com/Randy-Randoman/trava-3/issues/29) — Sign-up page and AuthContext signUp method (tasks 2-4)
