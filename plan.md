@@ -299,7 +299,18 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 
 ### Manual steps (user must do)
 1. **Get JWT secret** — Supabase dashboard → Settings → API → JWT Secret. Add `SUPABASE_JWT_SECRET=...` to `.env`
-2. **Install PyJWT** — `pip install PyJWT` (will be added to requirements.txt)
+2. **Install PyJWT** — `pip install PyJWT` (will be added to `requirements.txt`)
+
+### Files to update
+- New: `backend/app/core/auth.py`
+- `backend/app/core/config.py` — add `SUPABASE_JWT_SECRET`
+- `backend/app/api/trips.py` — replace `X-User-ID` with `Depends(require_auth)` + ownership
+- `backend/app/api/chat.py` — same
+- `backend/main.py` — same for `/feedback`
+- `backend/requirements.txt` — add PyJWT
+- `frontend/src/lib/api.ts` — `Authorization: Bearer` instead of `X-User-ID`
+- `frontend/src/lib/hooks/useChat.ts` — add auth headers to both fetches
+- `.env.example` — add `SUPABASE_JWT_SECRET` (already done)
 
 ---
 
