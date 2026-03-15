@@ -315,6 +315,7 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 - [#20] Shareable board links — backend + public route implemented ✅ (UI added in Phase 8)
 
 ### Remaining
+- Share button: display the share link visually on the board (not just clipboard copy — clipboard fails in some browsers/contexts)
 - UI to set/edit trip budget (currently must be set in DB directly)
 - Agent budget awareness (skill to read budget status)
 
