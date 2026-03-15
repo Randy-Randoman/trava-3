@@ -222,7 +222,37 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 
 ---
 
-## Phase 8: Backend JWT Validation
+## Phase 8: Share & Feedback UX ✅
+
+**Goal:** Users can share their trip board with others and give feedback from inside the trip planner.
+
+### Done
+
+| # | Task | Details | Status |
+|---|------|---------|--------|
+| 1 | [#33] Share button on trip canvas | `ShareButton` component: flushes canvas, calls `POST /trips/{trip_id}/share`, copies share link to clipboard with "Copied!" confirmation | ✅ |
+| 2 | [#34] Shared board: no agent | `/board/[share_token]` is view-only, no chat panel or agent. Just the canvas with clickable affiliate links | ✅ |
+| 3 | [#35] Feedback button on trip canvas | `FeedbackModal` extracted to shared component, Feedback button added to ChatInterface header | ✅ |
+
+### Bugs fixed during Phase 8
+
+| What was done | Status |
+|---------------|--------|
+| Public board blank canvas: `halftone-overlay` (fixed full-screen div at z-index 0) was covering Excalidraw's rendering layer. Fixed with `relative z-10` on board page container. | ✅ |
+| Extracted `FeedbackModal` from dashboard into shared `components/FeedbackModal.tsx` for reuse | ✅ |
+
+### Tests added
+- `tests/unit/test_share.py` — 6 tests for share endpoints (token generation, reuse, public board data, 404s)
+- All 48 tests passing
+
+### Issues
+- [#33](https://github.com/Randy-Randoman/trava-3/issues/33) — Share button on trip canvas
+- [#34](https://github.com/Randy-Randoman/trava-3/issues/34) — Shared board: view-only, no agent
+- [#35](https://github.com/Randy-Randoman/trava-3/issues/35) — Feedback button on trip canvas
+
+---
+
+## Phase 9: Backend JWT Validation — NEXT
 
 **Goal:** Replace `X-User-ID` header with proper Supabase JWT validation. Backend verifies the user's identity instead of trusting a header.
 
@@ -242,31 +272,22 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 
 ---
 
-## Phase 9: Better Board UX
+## Phase 10: Better Board UX
 
 **Goal:** The board is worth planning on — not just a card dump, but a real trip planner.
 
-### To do
+### Already implemented
+- [#18] Day-by-day layout — transformer groups items by `day` field into columns with date headers ✅
+- [#19] Budget tracking — floating BudgetPanel, backend `/trips/{trip_id}/budget` endpoint ✅
+- [#20] Shareable board links — backend + public route implemented ✅ (UI added in Phase 8)
 
-#### [#18] Day-by-day layout
-- Cards grouped by day on the canvas (Day 1 column, Day 2 column, etc.)
-- Agent or transformer places cards in day groups
-- User can drag cards between days
-
-#### [#19] Budget tracking
-- Board shows running total of all card prices
-- Could be a special "budget" element on the canvas, or a sidebar widget
-- Agent can answer "what's my total so far?" by reading board_items and summing prices
-
-#### [#20] Shareable board links
-- `share_token` column already exists on trips
-- Build a public read-only view: `/board/:share_token`
-- No auth required — anyone with the link can see the board
-- Affiliate links still work on shared boards (revenue from shares!)
+### Remaining
+- UI to set/edit trip budget (currently must be set in DB directly)
+- Agent budget awareness (skill to read budget status)
 
 ---
 
-## Phase 10: Scraping Resilience
+## Phase 11: Scraping Resilience
 
 **Goal:** Booking.com scraping doesn't break silently. Failures are detected, logged, and handled.
 
@@ -286,7 +307,7 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 
 ---
 
-## Phase 11: End-to-End Polish
+## Phase 12: End-to-End Polish
 
 **Goal:** Full flow works reliably. Edge cases handled. Ready for demo.
 

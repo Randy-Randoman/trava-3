@@ -82,7 +82,7 @@ export default function PublicBoardPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-retro-cream">
+    <div className="h-screen flex flex-col bg-retro-cream relative z-10">
       {/* Minimal header */}
       <header className="bg-retro-cream border-b-4 border-trava-black px-6 py-3 flex items-center gap-3 shrink-0">
         <img src="/trava-logo.png" alt="Trava" className="h-8 w-auto object-contain" />
