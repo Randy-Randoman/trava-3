@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useAuth } from '@/lib/auth'
 
 export default function LoginPage() {
@@ -104,6 +105,12 @@ export default function LoginPage() {
               </button>
             </div>
           </form>
+          <p className="text-center mt-4 text-sm text-gray-600">
+            Don&apos;t have an account?{' '}
+            <Link href="/signup" className="font-bold text-adventure-orange hover:underline">
+              Sign up
+            </Link>
+          </p>
         </div>
       </div>
     </div>
