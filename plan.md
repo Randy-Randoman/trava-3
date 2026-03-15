@@ -258,7 +258,7 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 
 ### Approach
 
-- **JWT validation:** Decode locally with PyJWT + `SUPABASE_JWT_SECRET` (no network call per request, production-ready)
+- **JWT validation:** Decode locally with PyJWT + JWKS endpoint (`SUPABASE_URL/.well-known/jwks.json`). Uses ES256 (ECC P-256) — no shared secret needed, just the existing `SUPABASE_URL`.
 - **Auth per-endpoint, not per-router:** Each endpoint explicitly declares `Depends(require_auth)` or not. Prevents accidentally locking out public endpoints like shared boards.
 - **Trip ownership:** Endpoints with `{trip_id}` verify the authenticated user owns the trip (403 if not)
 
@@ -266,7 +266,7 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 
 | # | Task | Details |
 |---|------|---------|
-| 1 | JWT auth dependency | Create `backend/app/core/auth.py` — FastAPI `Depends()` that extracts `Authorization: Bearer <token>`, decodes with PyJWT, returns `user_id`. 401 if missing/invalid. |
+| 1 | JWT auth dependency | Create `backend/app/core/auth.py` — FastAPI `Depends()` that extracts `Authorization: Bearer <token>`, verifies via JWKS (ES256), returns `user_id`. 401 if missing/invalid. |
 | 2 | Trip ownership helper | `verify_trip_owner(trip_id, user_id)` — loads trip, checks `trip.user_id == user_id`, raises 403 if not. |
 | 3 | Protect user-scoped endpoints | Add `Depends(require_auth)` to: `POST /trips`, `GET /trips`, `GET /trips/latest/id`, `POST /feedback` |
 | 4 | Protect trip-scoped endpoints | Add `Depends(require_auth)` + ownership check to: `GET/PUT /trips/{trip_id}/canvas`, `GET /trips/{trip_id}`, `PATCH /trips/{trip_id}`, `DELETE /trips/{trip_id}`, `GET /trips/{trip_id}/budget`, `POST /trips/{trip_id}/share` |
@@ -298,19 +298,18 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 - [#41](https://github.com/Randy-Randoman/trava-3/issues/41) — Cleanup: remove legacy auth code (task 8)
 
 ### Manual steps (user must do)
-1. **Get JWT secret** — Supabase dashboard → Settings → API → JWT Secret. Add `SUPABASE_JWT_SECRET=...` to `.env`
-2. **Install PyJWT** — `pip install PyJWT` (will be added to `requirements.txt`)
+1. **Install PyJWT** — `pip install PyJWT[crypto]` (will be added to `requirements.txt`). The `[crypto]` extra includes `cryptography` for ES256 support.
 
 ### Files to update
 - New: `backend/app/core/auth.py`
-- `backend/app/core/config.py` — add `SUPABASE_JWT_SECRET`
+- `backend/app/core/config.py` — remove `AUTH_ENABLED`, `DEFAULT_USER_ID`
 - `backend/app/api/trips.py` — replace `X-User-ID` with `Depends(require_auth)` + ownership
 - `backend/app/api/chat.py` — same
 - `backend/main.py` — same for `/feedback`
 - `backend/requirements.txt` — add PyJWT
 - `frontend/src/lib/api.ts` — `Authorization: Bearer` instead of `X-User-ID`
 - `frontend/src/lib/hooks/useChat.ts` — add auth headers to both fetches
-- `.env.example` — add `SUPABASE_JWT_SECRET` (already done)
+- `.env.example` — remove `SUPABASE_JWT_SECRET` (no longer needed, uses JWKS via existing `SUPABASE_URL`)
 
 ---
 
