@@ -1,11 +1,9 @@
-"""LangChain @tool wrappers for Booking.com search and affiliate links."""
+"""LangChain @tool wrapper for Booking.com search."""
 
 import json
-import os
 from langchain_core.tools import tool
 from .search import search_booking
 from .models import SearchParams
-from .deeplink import build_affiliate_url
 
 
 @tool
@@ -45,11 +43,8 @@ async def booking_search(
         sort_by=sort_by,
     )
 
-    cj_pid = os.getenv("CJ_PID", "")
-    cj_aid = os.getenv("CJ_AID", "")
-
     try:
-        hotels = await search_booking(params, cj_pid, cj_aid)
+        hotels = await search_booking(params)
     except Exception as e:
         return f"Search failed: {e}. Playwright/Chromium may not be installed."
 
@@ -77,17 +72,9 @@ async def booking_search(
             "review_count": h.review_count or "",
             "distance": h.distance or "",
             "description": " · ".join(desc_parts) if desc_parts else "",
-            "bookingUrl": h.affiliate_url or h.url or "",
+            "bookingUrl": h.url or "",
             "image_url": h.image_url or "",
         }
         results.append(item)
 
     return json.dumps(results)
-
-
-@tool
-def deeplink_generate(hotel_url: str) -> str:
-    """Generate an affiliate booking link for a specific hotel URL."""
-    cj_pid = os.getenv("CJ_PID", "")
-    cj_aid = os.getenv("CJ_AID", "")
-    return build_affiliate_url(hotel_url, cj_pid, cj_aid)

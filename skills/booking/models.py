@@ -26,4 +26,3 @@ class Hotel(BaseModel):
     distance: Optional[str] = None     # e.g. "1.2 km from center"
     url: Optional[str] = None          # Booking.com URL
     image_url: Optional[str] = None
-    affiliate_url: Optional[str] = None

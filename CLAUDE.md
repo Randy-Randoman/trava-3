@@ -1,8 +1,5 @@
 - Simplicity wins over cleverness. Ask for clarification, we are a team. Don't over-engineer.
-- **`plan.md`** is for making a plan and editing it
-- **`idea.md`** is the overall idea
-- **`architecture.md`** is the full technical architecture
-- **`learning.md`** has learnings from trava-2
+- **`docs/plan.md`** is for making a plan and editing it
 
 ## Commands
 
@@ -69,4 +66,3 @@ Config: `pytest.ini` at project root. Tests live in `tests/unit/`. Skills are on
 - Frontend: Next.js 16 + React 19 + Tailwind, App Router
 - Skills: each skill is a Python package in root `skills/` — exports `TOOLS` list and `PROMPT` string
 - Agent: LangGraph ReAct pattern, swappable LLM (Gemini default, Anthropic optional)
-- trava-2 source (for reference): `/Users/hoeherp/development/playground/github/trava-2/Untitled/`

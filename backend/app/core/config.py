@@ -47,10 +47,6 @@ class Settings:
     # Tavily Search
     TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
 
-    # CJ Affiliate (for affiliate links)
-    CJ_PID: str = os.getenv("CJ_PID", "")
-    CJ_AID: str = os.getenv("CJ_AID", "")
-
     # LLM provider: "google" (default) or "anthropic"
     LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "google")
 
