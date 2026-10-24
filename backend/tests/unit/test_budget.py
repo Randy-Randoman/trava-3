@@ -49,6 +49,8 @@ async def get_budget(client, prices, budget=500):
     ("$234/night", 234.0),
     ("$1,234", 1234.0),
     ("99.90 EUR", 99.9),
+    ("1.500 €", 1500.0),
+    ("1.234.567 €", 1234567.0),
 ])
 async def test_parses_price(client, price, expected):
     body = await get_budget(client, [price])

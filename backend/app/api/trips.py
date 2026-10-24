@@ -443,6 +443,9 @@ async def get_budget(trip_id: str, user_id: str = Depends(require_auth)):
                 elif "," in num:
                     # "1,234" is thousands, "12,50" is decimal
                     num = num.replace(",", "") if re.fullmatch(r"\d{1,3}(,\d{3})+", num) else num.replace(",", ".")
+                elif re.fullmatch(r"\d{1,3}(\.\d{3})+", num):
+                    # "1.234" is European thousands, "99.90" stays decimal
+                    num = num.replace(".", "")
                 try:
                     price_val = float(num)
                     spent += price_val
