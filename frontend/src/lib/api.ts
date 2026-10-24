@@ -191,22 +191,6 @@ export async function createTrip(data: { title?: string; destination?: string | 
 }
 
 /**
- * Submit user feedback
- */
-export async function submitFeedback(feedback: string, username: string): Promise<{ status: string; id: string }> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${BACKEND_URL}/feedback`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ feedback, username }),
-  })
-  if (!response.ok) {
-    throw new Error(`Failed to submit feedback: ${response.statusText}`)
-  }
-  return response.json()
-}
-
-/**
  * Budget API (Issue #19)
  */
 

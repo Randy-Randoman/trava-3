@@ -320,21 +320,6 @@ class DatabaseService:
         messages = list(reversed(response.data)) if response.data else []
         return messages
 
-    # ================================================
-    # Feedback Operations
-    # ================================================
-
-    async def save_feedback(self, user_id: str, username: str, feedback: str) -> Dict[str, Any]:
-        """Save user feedback to the database"""
-        print(f"[DB] save_feedback(user_id={user_id}, username={username})")
-        feedback_data = {
-            "user_id": user_id,
-            "username": username,
-            "feedback": feedback[:1000],  # Enforce 1000 char limit
-        }
-        response = self.client.table("user_feedback").insert(feedback_data).execute()
-        return response.data[0] if response.data else {}
-
 
 # Singleton instance
 db = DatabaseService()

@@ -29,7 +29,7 @@ Paste each file's contents into the SQL Editor, one at a time, and hit **Run**. 
 
 ## 3. Configure auth
 
-In **Authentication → Providers**, make sure **Email** is enabled. Set **Site URL** to `http://localhost:3000` and add `http://localhost:3000/auth/callback` to the redirect URLs. Optionally disable email confirmation while developing (**Authentication → Email**, turn off "Confirm email").
+In **Authentication → Providers**, make sure **Email** is enabled. Set **Site URL** to `http://localhost:3000`. Optionally disable email confirmation while developing (**Authentication → Email**, turn off "Confirm email").
 
 ### Email delivery
 

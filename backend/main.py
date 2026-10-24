@@ -5,12 +5,10 @@ Run with: uvicorn main:app --reload
 
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 
 from app.services.playwright import shutdown_playwright, warmup_playwright
-from app.core.auth import require_auth
 
 
 @asynccontextmanager
@@ -62,22 +60,3 @@ from app.api.trips import router as trips_router
 app.include_router(chat_router, tags=["chat"])
 app.include_router(trips_router, tags=["trips"])
 
-
-# ================================================
-# Feedback endpoint
-# ================================================
-
-class FeedbackRequest(BaseModel):
-    feedback: str
-    username: str = ""
-
-
-@app.post("/feedback")
-async def submit_feedback(body: FeedbackRequest, user_id: str = Depends(require_auth)):
-    """Accept user feedback and save to database."""
-    from app.services.database import db
-    try:
-        result = await db.save_feedback(user_id, body.username, body.feedback)
-        return {"status": "ok", "id": result.get("id", "")}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
