@@ -2,16 +2,18 @@
 Trips API Endpoints - Save/Load Board State
 """
 
+import logging
 import re
 import uuid
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Literal, Optional
 
 from ..services.database import db
-from ..logic.transformer import generate_excalidraw_scene
 from ..core.templates import generate_welcome_template
 from ..core.auth import require_auth, verify_trip_owner
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -48,7 +50,7 @@ async def get_canvas(trip_id: str, user_id: str = Depends(require_auth)):
     Returns the canvas state (elements + files) for a trip.
     If the canvas is empty, returns the welcome template instead.
     """
-    print(f"[API] GET /trips/{trip_id}/canvas")
+    logger.info(f"GET /trips/{trip_id}/canvas")
 
     try:
         await verify_trip_owner(trip_id, user_id)
@@ -56,7 +58,7 @@ async def get_canvas(trip_id: str, user_id: str = Depends(require_auth)):
 
         # If no canvas exists or canvas is empty, return welcome template
         if not canvas or not canvas.get("scene_elements") or len(canvas.get("scene_elements", [])) == 0:
-            print(f"    Canvas empty, returning welcome template")
+            logger.info("Canvas empty, returning welcome template")
             template = generate_welcome_template()
             return CanvasResponse(
                 trip_id=trip_id,
@@ -73,9 +75,11 @@ async def get_canvas(trip_id: str, user_id: str = Depends(require_auth)):
             last_modified=str(canvas.get("last_modified")) if canvas.get("last_modified") else None
         )
 
-    except Exception as e:
-        print(f"[API] Error getting canvas: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Error getting canvas")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/trips/{trip_id}/canvas", response_model=CanvasResponse)
@@ -86,7 +90,7 @@ async def update_canvas(trip_id: str, canvas: CanvasState, user_id: str = Depend
     Updates the canvas state for a trip.
     Full replace for MVP - sends complete elements + files.
     """
-    print(f"[API] PUT /trips/{trip_id}/canvas - {len(canvas.elements)} elements")
+    logger.info(f"PUT /trips/{trip_id}/canvas - {len(canvas.elements)} elements")
 
     try:
         await verify_trip_owner(trip_id, user_id)
@@ -117,7 +121,7 @@ async def update_canvas(trip_id: str, canvas: CanvasState, user_id: str = Depend
             ]
             if len(reconciled) != len(board_items):
                 removed = len(board_items) - len(reconciled)
-                print(f"[API] Board reconciliation: removed {removed} orphaned board item(s)")
+                logger.info(f"Board reconciliation: removed {removed} orphaned board item(s)")
                 await db.update_board_items(trip_id, reconciled)
 
         # If no existing canvas, the update might return empty
@@ -132,9 +136,9 @@ async def update_canvas(trip_id: str, canvas: CanvasState, user_id: str = Depend
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"[API] Error updating canvas: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Error updating canvas")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ================================================
@@ -163,7 +167,7 @@ async def create_trip(trip: TripCreate, user_id: str = Depends(require_auth)):
 
     Create a new trip for the authenticated user with welcome template
     """
-    print(f"[API] POST /trips - Title: {trip.title}, User: {user_id}")
+    logger.info(f"POST /trips - Title: {trip.title}, User: {user_id}")
 
     try:
         # Create the trip
@@ -187,7 +191,7 @@ async def create_trip(trip: TripCreate, user_id: str = Depends(require_auth)):
             scene_app_state=None
         )
 
-        print(f"[API] Created trip {trip_id} with welcome template")
+        logger.info(f"Created trip {trip_id} with welcome template")
 
         return TripResponse(
             id=trip_id,
@@ -197,9 +201,9 @@ async def create_trip(trip: TripCreate, user_id: str = Depends(require_auth)):
             created_at=str(result.get("created_at")) if result.get("created_at") else None
         )
 
-    except Exception as e:
-        print(f"[API] Error creating trip: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Error creating trip")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/trips/{trip_id}", response_model=TripResponse)
@@ -209,7 +213,7 @@ async def get_trip(trip_id: str, user_id: str = Depends(require_auth)):
 
     Get trip metadata
     """
-    print(f"[API] GET /trips/{trip_id}")
+    logger.info(f"GET /trips/{trip_id}")
 
     try:
         trip = await verify_trip_owner(trip_id, user_id)
@@ -224,9 +228,9 @@ async def get_trip(trip_id: str, user_id: str = Depends(require_auth)):
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"[API] Error getting trip: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Error getting trip")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/trips/latest/id")
@@ -236,7 +240,7 @@ async def get_latest_trip(user_id: str = Depends(require_auth)):
 
     Get the most recent trip ID for the user
     """
-    print(f"[API] GET /trips/latest/id - User: {user_id}")
+    logger.info(f"GET /trips/latest/id - User: {user_id}")
 
     try:
         trips = await db.get_user_trips(user_id)
@@ -253,9 +257,9 @@ async def get_latest_trip(user_id: str = Depends(require_auth)):
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"[API] Error getting latest trip: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Error getting latest trip")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ================================================
@@ -287,7 +291,7 @@ async def list_trips(user_id: str = Depends(require_auth)):
     Get all trips for the current user (dashboard view)
     Includes thumbnail images from canvas state
     """
-    print(f"[API] GET /trips - User: {user_id}")
+    logger.info(f"GET /trips - User: {user_id}")
 
     try:
         trips = await db.get_user_trips_with_thumbnails(user_id)
@@ -307,16 +311,16 @@ async def list_trips(user_id: str = Depends(require_auth)):
 
         return TripListResponse(trips=trip_items, count=len(trip_items))
 
-    except Exception as e:
-        print(f"[API] Error listing trips: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Error listing trips")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 class TripUpdate(BaseModel):
     """Update trip request"""
     title: Optional[str] = None
     destination: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[Literal["draft", "active", "archived"]] = None
 
 
 @router.patch("/trips/{trip_id}", response_model=TripResponse)
@@ -326,7 +330,7 @@ async def update_trip(trip_id: str, update: TripUpdate, user_id: str = Depends(r
 
     Update trip metadata (rename, change status, etc.)
     """
-    print(f"[API] PATCH /trips/{trip_id}")
+    logger.info(f"PATCH /trips/{trip_id}")
 
     try:
         await verify_trip_owner(trip_id, user_id)
@@ -358,9 +362,9 @@ async def update_trip(trip_id: str, update: TripUpdate, user_id: str = Depends(r
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"[API] Error updating trip: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Error updating trip")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/trips/{trip_id}")
@@ -370,7 +374,7 @@ async def delete_trip(trip_id: str, user_id: str = Depends(require_auth)):
 
     Delete a trip, its canvas state, and any uploaded images from storage
     """
-    print(f"[API] DELETE /trips/{trip_id}")
+    logger.info(f"DELETE /trips/{trip_id}")
 
     try:
         await verify_trip_owner(trip_id, user_id)
@@ -382,10 +386,10 @@ async def delete_trip(trip_id: str, user_id: str = Depends(require_auth)):
                 paths = [f"{trip_id}/{f['name']}" for f in file_list]
                 if paths:
                     storage.remove(paths)
-                    print(f"[API] Deleted {len(paths)} image(s) from storage for trip {trip_id}")
+                    logger.info(f"Deleted {len(paths)} image(s) from storage for trip {trip_id}")
         except Exception as storage_err:
             # Don't fail the whole delete if storage cleanup fails
-            print(f"[API] Warning: storage cleanup failed for trip {trip_id}: {storage_err}")
+            logger.warning(f"Storage cleanup failed for trip {trip_id}: {storage_err}")
 
         success = await db.delete_trip(trip_id)
 
@@ -396,9 +400,9 @@ async def delete_trip(trip_id: str, user_id: str = Depends(require_auth)):
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"[API] Error deleting trip: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Error deleting trip")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ================================================
@@ -413,7 +417,7 @@ async def get_budget(trip_id: str, user_id: str = Depends(require_auth)):
     Returns the trip budget and running total spent from board items.
     Extracts the first numeric value from each item's price string.
     """
-    print(f"[API] GET /trips/{trip_id}/budget")
+    logger.info(f"GET /trips/{trip_id}/budget")
 
     try:
         trip = await verify_trip_owner(trip_id, user_id)
@@ -426,11 +430,21 @@ async def get_budget(trip_id: str, user_id: str = Depends(require_auth)):
         for bi in board_items:
             data = bi.get("data", {})
             price_str = str(data.get("price", "") or "")
-            # Extract first number from strings like "$234", "$234/night", "234 USD"
-            match = re.search(r"[\d]+\.?\d*", price_str.replace(",", ""))
+            # Extract first number from strings like "$234", "$1,234", "99.90 EUR", "1.234,50 €"
+            match = re.search(r"\d[\d.,]*", price_str)
             if match:
+                num = match.group().rstrip(".,")
+                if "," in num and "." in num:
+                    # The separator that comes last is the decimal one
+                    if num.rfind(",") > num.rfind("."):
+                        num = num.replace(".", "").replace(",", ".")
+                    else:
+                        num = num.replace(",", "")
+                elif "," in num:
+                    # "1,234" is thousands, "12,50" is decimal
+                    num = num.replace(",", "") if re.fullmatch(r"\d{1,3}(,\d{3})+", num) else num.replace(",", ".")
                 try:
-                    price_val = float(match.group())
+                    price_val = float(num)
                     spent += price_val
                     items_with_prices.append({
                         "name": bi.get("name", ""),
@@ -448,9 +462,9 @@ async def get_budget(trip_id: str, user_id: str = Depends(require_auth)):
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"[API] Error getting budget: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Error getting budget")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ================================================
@@ -465,7 +479,7 @@ async def share_trip(trip_id: str, user_id: str = Depends(require_auth)):
     Generate (or return existing) share token for a trip.
     Returns the share token so the frontend can build the share URL.
     """
-    print(f"[API] POST /trips/{trip_id}/share")
+    logger.info(f"POST /trips/{trip_id}/share")
 
     try:
         trip = await verify_trip_owner(trip_id, user_id)
@@ -478,9 +492,9 @@ async def share_trip(trip_id: str, user_id: str = Depends(require_auth)):
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"[API] Error sharing trip: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Error sharing trip")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/trips/public/{share_token}")
@@ -491,7 +505,7 @@ async def get_public_board(share_token: str):
     Public read-only board view — no auth required.
     Returns trip title + canvas elements/files for display.
     """
-    print(f"[API] GET /trips/public/{share_token}")
+    logger.info("GET /trips/public/<token>")
 
     try:
         trip = await db.get_trip_by_share_token(share_token)
@@ -509,6 +523,6 @@ async def get_public_board(share_token: str):
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"[API] Error fetching public board: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Error fetching public board")
+        raise HTTPException(status_code=500, detail="Internal server error")

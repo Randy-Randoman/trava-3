@@ -11,7 +11,7 @@ FAKE_TRIP_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
 
 @pytest.fixture
-def client():
+async def client():
     from main import app
     from app.core.auth import require_auth
 
@@ -22,7 +22,8 @@ def client():
     app.dependency_overrides[require_auth] = lambda: FAKE_USER_ID
     original = app.router.lifespan_context
     app.router.lifespan_context = _noop_lifespan
-    yield httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c:
+        yield c
     app.router.lifespan_context = original
     app.dependency_overrides.clear()
 
@@ -55,7 +56,6 @@ async def test_parses_price(client, price, expected):
     assert body["items"] == [{"name": "Item 0", "type": "stay", "price": expected}]
 
 
-@pytest.mark.xfail(reason="Bug: commas are stripped, so European '1.234,50' parses as 1.2345", strict=True)
 async def test_parses_european_format(client):
     body = await get_budget(client, ["1.234,50 €"])
     assert body["spent"] == 1234.5

@@ -1,16 +1,17 @@
 """Web search and image search tools using Tavily API."""
 
 import json
-import os
 
 from langchain_core.tools import tool
 from tavily import AsyncTavilyClient
+
+from app.core.config import settings
 
 
 @tool
 async def web_search(query: str) -> str:
     """Search the web for information about destinations, activities, restaurants, and travel tips. Returns summarized results with sources."""
-    api_key = os.getenv("TAVILY_API_KEY")
+    api_key = settings.TAVILY_API_KEY
     if not api_key:
         return "Error: TAVILY_API_KEY not set in environment."
 
@@ -31,7 +32,7 @@ async def web_search(query: str) -> str:
 @tool
 async def image_search(query: str) -> str:
     """Search for images of destinations, hotels, or activities. Returns image URLs."""
-    api_key = os.getenv("TAVILY_API_KEY")
+    api_key = settings.TAVILY_API_KEY
     if not api_key:
         return "Error: TAVILY_API_KEY not set in environment."
 

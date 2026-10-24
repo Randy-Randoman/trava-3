@@ -3,12 +3,18 @@ TRAVA Backend - FastAPI Application Entry Point
 Run with: uvicorn main:app --reload
 """
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.services.playwright import shutdown_playwright, warmup_playwright
+
+# Show our own INFO logs; third-party libraries (e.g. httpx, which logs request URLs) stay at WARNING
+logging.basicConfig(format="%(levelname)s %(name)s: %(message)s")
+logging.getLogger("app").setLevel(logging.INFO)
+logging.getLogger("skills").setLevel(logging.INFO)
 
 
 @asynccontextmanager

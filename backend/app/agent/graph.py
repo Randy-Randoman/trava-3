@@ -23,7 +23,7 @@ def _get_llm():
         from langchain_anthropic import ChatAnthropic
 
         return ChatAnthropic(
-            model="claude-sonnet-4.6",
+            model="claude-sonnet-5-5",
             api_key=settings.ANTHROPIC_API_KEY,
         )
     else:
@@ -61,7 +61,7 @@ def create_agent_graph(trip_id: str, user_id: str):
 
     # --- Nodes ---
 
-    def agent_node(state: AgentState):
+    async def agent_node(state: AgentState):
         """Call the LLM with the current messages."""
         messages = state["messages"]
 
@@ -69,7 +69,7 @@ def create_agent_graph(trip_id: str, user_id: str):
         if not messages or not isinstance(messages[0], SystemMessage):
             messages = [SystemMessage(content=system_prompt)] + messages
 
-        response = llm_with_tools.invoke(messages)
+        response = await llm_with_tools.ainvoke(messages)
         return {"messages": [response]}
 
     def should_continue(state: AgentState):

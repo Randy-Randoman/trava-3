@@ -5,11 +5,13 @@ This module implements a Masonry Layout Algorithm to position
 travel cards (stays, activities) on an Excalidraw canvas.
 """
 
+import logging
 import uuid
-import urllib.parse
 import httpx
 from typing import Dict, List, Any, Optional
 from ..core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 # ================================================
@@ -40,28 +42,9 @@ def sanitize_url(url: str) -> Optional[str]:
     return url
 
 
-def get_unsplash_url(search_term: str, width: int = 800, height: int = 600) -> str:
-    """
-    Generate an Unsplash Source URL for a search term.
-    This uses the free Unsplash Source API which doesn't require authentication.
-
-    Args:
-        search_term: What to search for (e.g., "Tokyo", "beach sunset", "hotel room")
-        width: Image width
-        height: Image height
-
-    Returns:
-        URL to a relevant Unsplash image
-    """
-    # Clean and encode the search term
-    clean_term = urllib.parse.quote(search_term.lower().replace(",", ""))
-    return f"https://source.unsplash.com/{width}x{height}/?{clean_term}"
-
-
 async def search_tavily_image(query: str) -> Optional[str]:
     """
     Search for a real image using Tavily API (async version).
-    Falls back to Unsplash if Tavily fails.
 
     Args:
         query: Search query for the image
@@ -89,10 +72,10 @@ async def search_tavily_image(query: str) -> Optional[str]:
             data = response.json()
             images = data.get("images", [])
             if images:
-                print(f"[Transformer] Tavily found image for '{query}': {images[0][:60]}...")
+                logger.info(f"Tavily found image for '{query}': {images[0][:60]}...")
                 return images[0]
     except Exception as e:
-        print(f"[Transformer] Tavily image search failed for '{query}': {e}")
+        logger.warning(f"Tavily image search failed for '{query}': {e}")
 
     return None
 
@@ -395,7 +378,7 @@ async def create_card_group(
         image_url: Optional image URL
         column_width: Width of the card
         image_height: Height for images
-        fallback_search: Search term for fallback Unsplash image if no image_url
+        fallback_search: Search term for a Tavily image lookup
         booking_url: Optional URL for booking (clicking card opens this link)
 
     Returns:
@@ -429,22 +412,18 @@ async def create_card_group(
     # Get best image URL: prefer Tavily (reliable CDNs) over scraper URLs (often blocked)
     actual_image_url = None
     if fallback_search:
-        print(f"[Transformer] Searching image for: {fallback_search}")
+        logger.info(f"Searching image for: {fallback_search}")
         actual_image_url = await search_tavily_image(fallback_search)
         if actual_image_url:
-            print(f"[Transformer] Got Tavily image: {actual_image_url[:60]}...")
+            logger.info(f"Got Tavily image: {actual_image_url[:60]}...")
     # Fall back to scraper URL if Tavily found nothing
     if not actual_image_url and image_url:
         actual_image_url = image_url
-        print(f"[Transformer] Using scraper image: {actual_image_url[:60]}...")
-    # Last resort: Unsplash
-    if not actual_image_url and fallback_search:
-        actual_image_url = get_unsplash_url(fallback_search)
-        print(f"[Transformer] Using Unsplash fallback: {actual_image_url[:60]}...")
+        logger.info(f"Using scraper image: {actual_image_url[:60]}...")
 
     # Debug: Log the image URL being used
     if actual_image_url:
-        print(f"[Transformer] Card '{title}' using image: {actual_image_url[:80]}...")
+        logger.info(f"Card '{title}' using image: {actual_image_url[:80]}...")
 
     # Image (if provided or fallback)
     if actual_image_url:
@@ -544,247 +523,6 @@ async def create_card_group(
 # ================================================
 # Masonry Layout Algorithm
 # ================================================
-
-def _get_shortest_column(col_heights: List[float]) -> int:
-    """Find the index of the column with minimum height"""
-    return col_heights.index(min(col_heights))
-
-
-async def generate_excalidraw_scene(
-    trip_data: Dict[str, Any],
-    viewport_width: int = DEFAULT_VIEWPORT_WIDTH,
-    viewport_height: int = DEFAULT_VIEWPORT_HEIGHT
-) -> Dict[str, Any]:
-    """
-    Convert Trip JSON to Excalidraw Scene JSON
-
-    Implements "Shortest Column First" masonry layout with responsive sizing.
-
-    Args:
-        trip_data: The semantic trip data from Wave 1 agent
-        viewport_width: Width of the canvas viewport (for responsive layout)
-        viewport_height: Height of the canvas viewport
-
-    Returns:
-        Valid Excalidraw scene with elements and files
-    """
-    print(f"[Transformer] Generating Excalidraw scene for {viewport_width}x{viewport_height}...")
-
-    # Calculate responsive layout parameters
-    layout = calculate_layout_params(viewport_width, viewport_height)
-    column_width = layout['column_width']
-    column_count = layout['column_count']
-    gap = layout['gap']
-    image_height = layout['image_height']
-
-    elements = []
-    files = {}
-
-    # Initialize column heights tracker
-    col_heights = [0.0] * column_count
-
-    # Extract data from trip
-    trip_info = trip_data.get("trip", {})
-    stays = trip_data.get("stays", [])
-    activities = trip_data.get("activities", [])
-    flights = trip_data.get("flights", [])
-
-    # Process flights first (if any)
-    for flight in flights:
-        col_idx = _get_shortest_column(col_heights)
-        x = gap + col_idx * (column_width + gap)
-        y = col_heights[col_idx]
-
-        # Build flight subtitle
-        subtitle_parts = []
-        if flight.get("origin") and flight.get("destination"):
-            subtitle_parts.append(f"✈️ {flight.get('origin')} → {flight.get('destination')}")
-        if flight.get("departure_date"):
-            subtitle_parts.append(f"📅 {flight.get('departure_date')}")
-        if flight.get("airline"):
-            subtitle_parts.append(f"🛫 {flight.get('airline')}")
-
-        # Build price text
-        price_text = ""
-        if flight.get("price"):
-            currency = flight.get("currency", "EUR")
-            price_text = f"💰 {currency} {flight.get('price')}"
-
-        # Build description
-        desc_parts = []
-        if flight.get("duration"):
-            desc_parts.append(f"Duration: {flight.get('duration')}")
-        if flight.get("stops") is not None:
-            stops = flight.get("stops")
-            desc_parts.append(f"{'Non-stop' if stops == 0 else f'{stops} stop(s)'}")
-        if flight.get("departure_time"):
-            desc_parts.append(f"Departs: {flight.get('departure_time')}")
-        if flight.get("arrival_time"):
-            desc_parts.append(f"Arrives: {flight.get('arrival_time')}")
-
-        card_elements, card_files, height = await create_card_group(
-            x=x,
-            y=y,
-            title=flight.get("name", "Flight"),
-            subtitle=" • ".join(subtitle_parts),
-            description="\n".join(desc_parts),
-            price_text=price_text,
-            card_type="flight",
-            image_url=flight.get("imageUrl"),
-            column_width=column_width,
-            image_height=image_height,
-            booking_url=flight.get("bookingUrl")
-        )
-
-        elements.extend(card_elements)
-        files.update(card_files)
-        col_heights[col_idx] += height + gap
-
-    # Process stays
-    for stay in stays:
-        col_idx = _get_shortest_column(col_heights)
-        x = gap + col_idx * (column_width + gap)
-        y = col_heights[col_idx]
-
-        # Build price text
-        price_text = ""
-        if stay.get("price"):
-            currency = stay.get("currency", "EUR")
-            price_text = f"💰 {currency} {stay.get('price')}"
-            if stay.get("pricePerNight"):
-                price_text += "/night"
-
-        # Build description with more details
-        desc_parts = []
-        if stay.get("checkIn"):
-            desc_parts.append(f"Check-in: {stay.get('checkIn')}")
-        if stay.get("checkOut"):
-            desc_parts.append(f"Check-out: {stay.get('checkOut')}")
-        if stay.get("type"):
-            desc_parts.append(f"Type: {stay.get('type').title()}")
-        if stay.get("roomType"):
-            desc_parts.append(f"Room: {stay.get('roomType')}")
-        if stay.get("amenities"):
-            amenities = stay.get("amenities")
-            if isinstance(amenities, list):
-                desc_parts.append(f"Amenities: {', '.join(amenities[:3])}")
-        if stay.get("rating"):
-            desc_parts.append(f"Rating: {'⭐' * int(stay.get('rating'))}")
-        if stay.get("description"):
-            desc_parts.append(stay.get("description"))
-
-        # Generate fallback search term based on stay name and location
-        fallback_search = f"{stay.get('name', '')} {stay.get('location', '')} hotel"
-
-        card_elements, card_files, height = await create_card_group(
-            x=x,
-            y=y,
-            title=stay.get("name", "Accommodation"),
-            subtitle=f"📍 {stay.get('location', '')}",
-            description="\n".join(desc_parts),
-            price_text=price_text,
-            card_type="stay",
-            image_url=stay.get("imageUrl"),
-            column_width=column_width,
-            image_height=image_height,
-            fallback_search=fallback_search,
-            booking_url=stay.get("bookingUrl")
-        )
-
-        elements.extend(card_elements)
-        files.update(card_files)
-        col_heights[col_idx] += height + gap
-
-    # Process activities
-    for activity in activities:
-        col_idx = _get_shortest_column(col_heights)
-        x = gap + col_idx * (column_width + gap)
-        y = col_heights[col_idx]
-
-        # Map category to card type
-        category = activity.get("category", "other")
-        card_type = "food" if category == "food" else "activity"
-        if category == "sightseeing":
-            card_type = "sightseeing"
-
-        # Build subtitle
-        subtitle_parts = []
-        if activity.get("location"):
-            subtitle_parts.append(f"📍 {activity['location']}")
-        if activity.get("date"):
-            subtitle_parts.append(f"📅 {activity['date']}")
-        if activity.get("time"):
-            subtitle_parts.append(f"🕐 {activity['time']}")
-        if activity.get("duration"):
-            subtitle_parts.append(f"⏱️ {activity['duration']}")
-
-        # Build price text
-        price_text = ""
-        if activity.get("price"):
-            currency = activity.get("currency", "EUR")
-            price_text = f"💰 {currency} {activity.get('price')}"
-            if activity.get("priceType"):
-                price_text += f" {activity.get('priceType')}"  # e.g., "/person"
-
-        # Build description
-        desc_parts = []
-        if activity.get("description"):
-            desc_parts.append(activity.get("description"))
-        if activity.get("highlights"):
-            highlights = activity.get("highlights")
-            if isinstance(highlights, list):
-                desc_parts.append("Highlights: " + ", ".join(highlights[:3]))
-        if activity.get("rating"):
-            desc_parts.append(f"Rating: {'⭐' * int(activity.get('rating'))}")
-        if activity.get("bookingRequired"):
-            desc_parts.append("📋 Booking required")
-
-        # Generate fallback search term based on activity name, category, and location
-        fallback_terms = [activity.get("name", ""), activity.get("location", "")]
-        if category == "food":
-            fallback_terms.append("restaurant food")
-        elif category == "sightseeing":
-            fallback_terms.append("landmark")
-        elif category == "adventure":
-            fallback_terms.append("adventure outdoor")
-        elif category == "culture":
-            fallback_terms.append("culture museum")
-        fallback_search = " ".join(fallback_terms)
-
-        card_elements, card_files, height = await create_card_group(
-            x=x,
-            y=y,
-            title=activity.get("name", "Activity"),
-            subtitle=" • ".join(subtitle_parts),
-            description="\n".join(desc_parts),
-            price_text=price_text,
-            card_type=card_type,
-            image_url=activity.get("imageUrl"),
-            column_width=column_width,
-            image_height=image_height,
-            fallback_search=fallback_search,
-            booking_url=activity.get("bookingUrl")
-        )
-
-        elements.extend(card_elements)
-        files.update(card_files)
-        col_heights[col_idx] += height + gap
-
-    print(f"[Transformer] Generated {len(elements)} elements, {len(files)} files (layout: {column_count} cols x {column_width}px)")
-
-    # Return valid Excalidraw scene structure
-    return {
-        "type": "excalidraw",
-        "version": 2,
-        "source": "trava-transformer",
-        "elements": elements,
-        "files": files,
-        "appState": {
-            "gridSize": None,
-            "viewBackgroundColor": "#FDFBF7"  # Retro Cream
-        }
-    }
-
 
 async def generate_card_elements(
     items: List[Dict[str, Any]],
@@ -933,6 +671,6 @@ async def generate_card_elements(
     # Return group_ids in original input order
     group_ids = [group_ids_map.get(i, _generate_id()) for i in range(len(items))]
 
-    print(f"[Transformer] generate_card_elements: {len(items)} items -> {len(all_elements)} elements, {len(all_files)} files")
+    logger.info(f"generate_card_elements: {len(items)} items -> {len(all_elements)} elements, {len(all_files)} files")
 
     return all_elements, all_files, group_ids
