@@ -97,6 +97,61 @@ skills/     Auto-discovered tool packages (booking, board, web_search)
 - **Backend** — FastAPI routes for trips + SSE chat, LangGraph agent, Supabase client.
 - **Skills** — each skill is a Python package that exports a `TOOLS` list and a `PROMPT` string. Auto-discovered at agent startup.
 
+```mermaid
+flowchart LR
+    user([User in browser])
+    ext([MCP client<br/>Claude Code / Cowork])
+
+    subgraph FE["Frontend · Next.js"]
+        ui["Dashboard · Chat · Excalidraw board"]
+        proxy["/api/image-proxy"]
+    end
+
+    subgraph BE["Backend · FastAPI"]
+        api["REST API<br/>trips · canvas · share"]
+        chat["/chat/stream (SSE)"]
+        mcp["/mcp"]
+        agent["LangGraph ReAct agent"]
+        subgraph SK["Skills"]
+            booking["booking"]
+            board["board"]
+            web["web_search"]
+        end
+        transformer["Transformer<br/>board items → Excalidraw"]
+    end
+
+    subgraph SB["Supabase"]
+        auth["Auth (JWT)"]
+        db[("Postgres<br/>trips · canvas_states · messages")]
+        storage[("Storage<br/>canvas-images")]
+    end
+
+    llm{{"LLM<br/>Gemini / Claude"}}
+    bcom[("Booking.com")]
+    tavily[("Tavily")]
+    imgs[("Image hosts")]
+
+    user --> ui
+    ui -- "login" --> auth
+    ui -- "upload images" --> storage
+    ui -- "Bearer JWT" --> api
+    ui -- "Bearer JWT" --> chat
+    ui --> proxy --> imgs
+    chat --> agent
+    agent <--> llm
+    agent --> SK
+    booking -- "Playwright" --> bcom
+    web --> tavily
+    board --> transformer --> db
+    api --> db
+    api -. "verify JWT (JWKS)" .-> auth
+
+    ext -. "OAuth 2.1 via Supabase Auth (planned)" .-> auth
+    ext -. "Bearer token (planned)" .-> mcp
+    mcp -. "planned" .-> SK
+    db -. "Realtime (planned)" .-> ui
+```
+
 ## Adding a skill
 
 Skills are the extensibility hook. Every capability the agent has — searching Booking.com, reading the board, web search — is a skill. Adding one is ~20 lines.
