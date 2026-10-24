@@ -4,8 +4,6 @@ import os
 import pytest
 
 # Set dummy env vars so skills don't fail on missing keys during tests
-os.environ.setdefault("CJ_PID", "test-pid")
-os.environ.setdefault("CJ_AID", "test-aid")
 os.environ.setdefault("TAVILY_API_KEY", "test-tavily-key")
 os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_KEY", "test-service-key")

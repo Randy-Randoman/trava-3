@@ -3,7 +3,6 @@
 import logging
 from urllib.parse import quote, urlencode, urlparse, urlunparse
 from .models import SearchParams, Hotel
-from .deeplink import build_affiliate_url
 
 logger = logging.getLogger(__name__)
 
@@ -102,9 +101,7 @@ def append_booking_params(hotel_url: str, params: SearchParams) -> str:
     return f"{hotel_url}{separator}{booking_params}"
 
 
-async def search_booking(
-    params: SearchParams, cj_pid: str = "", cj_aid: str = ""
-) -> list[Hotel]:
+async def search_booking(params: SearchParams) -> list[Hotel]:
     """Search Booking.com and return hotel results."""
     # Lazy import: app.services is only on sys.path when the backend is running
     from app.services.playwright import get_page
@@ -178,13 +175,6 @@ async def search_booking(
                 else:
                     parameterized_url = None
 
-                # Build affiliate link
-                affiliate_url = (
-                    build_affiliate_url(parameterized_url, cj_pid, cj_aid)
-                    if parameterized_url
-                    else None
-                )
-
                 hotel_name = name or "Unknown Hotel"
 
                 if hotel_url is None:
@@ -201,9 +191,8 @@ async def search_booking(
                         rating=rating,
                         review_count=review_count,
                         distance=distance,
-                        url=hotel_url,
+                        url=parameterized_url or hotel_url,
                         image_url=image_url,
-                        affiliate_url=affiliate_url,
                     )
                 )
             except Exception as e:

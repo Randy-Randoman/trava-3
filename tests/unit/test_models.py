@@ -58,7 +58,6 @@ class TestHotel:
         assert h.name == "Test Hotel"
         assert h.price is None
         assert h.url is None
-        assert h.affiliate_url is None
 
     def test_full_hotel(self):
         h = Hotel(
@@ -70,7 +69,6 @@ class TestHotel:
             distance="1.2 km from center",
             url="https://www.booking.com/hotel/pt/grand-lisboa.html",
             image_url="https://cf.bstatic.com/images/hotel/max1024x768/123.jpg",
-            affiliate_url="https://www.anrdoezrs.net/click-111-222?url=...",
         )
         assert h.rating == "8.7"
         assert h.review_count == "1,234"

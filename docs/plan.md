@@ -305,7 +305,87 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 
 ---
 
-## Phase 10: Better Board UX
+## Phase 10: Publish-Ready Cleanup
+
+**Goal:** The public repo is safe, accurate and easy to run. It's a personal showcase: people can use it or take inspiration, but it doesn't accept contributions.
+
+### Decisions
+| Topic | Decision |
+|-------|----------|
+| **DB security** | New migration: drop `is_approved`, drop the "anyone can view shared trips/canvas" policies, owner-scoped `canvas-images` write policies |
+| **User approval** | Removed entirely (to lock down your own instance, disable sign-ups in Supabase) |
+| **Image proxy** | Stays public (shared boards need it); block internal addresses + redirects, `image/*` only without SVG, 5 MB cap, no CORS `*` |
+| **Feedback** | Removed entirely (no issues or contributions) |
+| **Auth** | One path: browser supabase-js. Delete `/auth/callback` + `@supabase/ssr` |
+| **LLM** | Gemini (default) or Claude Sonnet 5.5 (`claude-sonnet-5-5`), `ainvoke` |
+| **Dependencies** | next 16.4.x, React 19 types, eslint 9 flat config, `npm audit fix` without force, Excalidraw advisories accepted; backend pinned + `requirements-dev.txt` |
+| **Layout** | Skills only in `backend/skills/`; tests in `backend/tests/{unit,integration}`; migrations in `supabase/migrations/` |
+| **Tests** | Backend unit + integration (local Supabase via CLI) + frontend unit (Vitest). No E2E, no CI |
+| **Deploy** | Docker Compose + your own Railway, documented in `docs/deploy.md`; no Railway template |
+| **Git history** | Not rewritten (only the publishable Supabase key leaked, which is public by design) |
+| **Delivery** | GitHub issues labelled `ready-for-agent`, worked on `dev`, one PR `dev` → `main` |
+
+### Issues
+| # | Issue | Blocked by |
+|---|-------|-----------|
+| [#42](https://github.com/Randy-Randoman/trava-3/issues/42) | Restructure skills, tests and migrations | — |
+| [#43](https://github.com/Randy-Randoman/trava-3/issues/43) | Security migration + remove user approval | #42 |
+| [#44](https://github.com/Randy-Randoman/trava-3/issues/44) | Vitest setup + harden image proxy | #42 |
+| [#45](https://github.com/Randy-Randoman/trava-3/issues/45) | Remove feedback feature and unused auth callback | #42 |
+| [#46](https://github.com/Randy-Randoman/trava-3/issues/46) | Upgrade and pin dependencies, fix lint | #42 |
+| [#47](https://github.com/Randy-Randoman/trava-3/issues/47) | Backend hardening (errors, logging, config, async agent) + dead code | #42 |
+| [#48](https://github.com/Randy-Randoman/trava-3/issues/48) | Unit tests for board tools and budget parsing | #42 |
+| [#49](https://github.com/Randy-Randoman/trava-3/issues/49) | Frontend fixes (SSE buffering, env checks) + cleanup | #44, #46 |
+| [#50](https://github.com/Randy-Randoman/trava-3/issues/50) | Integration tests against local Supabase | #42, #43 |
+| [#51](https://github.com/Randy-Randoman/trava-3/issues/51) | Docker + Railway deployment for self-hosters | #46 |
+| [#52](https://github.com/Randy-Randoman/trava-3/issues/52) | Docs and showcase cleanup | all above |
+
+### Manual steps (user must do — agent cannot)
+- Apply the security migration to the live Supabase project (`supabase link` + `supabase db push`, or the SQL editor)
+- GitHub: add a description and topics; keep Issues on for own tracking only
+- ~~Close stale issues #18, #19, #20~~ ✅ closed
+- Delete the stale `claude/debug-railway-error-NuJhs` branch and the local `worktree-agent-*` branches
+
+### Backlog (not this phase)
+- Store card images in Supabase storage instead of proxying them
+- E2E tests (Playwright), CI
+- Squash migrations into one schema file
+
+---
+
+## Phase 11: MCP Server (Bring Your Own Agent)
+
+**Goal:** External agents (Claude Code, Claude Cowork, any MCP client) can plan trips on the TRAVA board.
+
+### Decisions
+| Topic | Decision |
+|-------|----------|
+| **Hosting** | Remote Streamable HTTP MCP server at `/mcp`, inside the FastAPI backend (deploys with it) |
+| **Auth** | OAuth 2.1 with Supabase Auth as the authorization server (PKCE, dynamic client registration). TRAVA hosts `/oauth/consent` + a "Connected apps" page; the backend verifies agent JWTs (JWKS, `client_id` claim, live grant check) and serves the RFC 9728 metadata. Same pattern as the solofounder-playbook project |
+| **Tools** | `list_trips`, `create_trip`, `board_read/add_items/remove_items/clear`, `booking_search`, `web_search`, `image_search`; ownership check on every `trip_id` |
+| **Skill reuse** | Skills get plain async functions with explicit `trip_id`; the `@tool` wrappers stay for LangGraph |
+| **Live sync** | Supabase Realtime on `canvas_states` → open board reloads |
+| **Stale tabs** | Canvas save sends `base_version`; 409 on conflict, so reconciliation never deletes unseen items |
+| **Clients** | Claude Code (`claude mcp add --transport http`), Claude Cowork / claude.ai custom connectors (need a public HTTPS URL) |
+
+### Issues
+| # | Issue | Blocked by |
+|---|-------|-----------|
+| [#53](https://github.com/Randy-Randoman/trava-3/issues/53) | Make skills callable without the LangGraph agent | Phase 10 |
+| [#54](https://github.com/Randy-Randoman/trava-3/issues/54) | OAuth 2.1 for agents (Supabase Auth, consent page, token verification) | Phase 10 |
+| [#55](https://github.com/Randy-Randoman/trava-3/issues/55) | Remote MCP server at `/mcp` | #53, #54 |
+| [#56](https://github.com/Randy-Randoman/trava-3/issues/56) | Canvas save conflicts (stale tab must not delete items) | Phase 10 |
+| [#57](https://github.com/Randy-Randoman/trava-3/issues/57) | Live board updates via Supabase Realtime | #56 |
+| [#58](https://github.com/Randy-Randoman/trava-3/issues/58) | Document MCP usage | #55, #57 |
+
+### Manual steps (user must do — agent cannot)
+- Supabase → Authentication → OAuth Server: enable it, authorization path `/oauth/consent`, allow dynamic client registration
+- Supabase JWT signing key must be asymmetric (ES256/RS256)
+- Set `PUBLIC_BASE_URL` on the backend service (Railway)
+
+---
+
+## Phase 12: Better Board UX
 
 **Goal:** The board is worth planning on — not just a card dump, but a real trip planner.
 
@@ -315,12 +395,13 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 - [#20] Shareable board links — backend + public route implemented ✅ (UI added in Phase 8)
 
 ### Remaining
+- Share button: display the share link visually on the board (not just clipboard copy — clipboard fails in some browsers/contexts)
 - UI to set/edit trip budget (currently must be set in DB directly)
 - Agent budget awareness (skill to read budget status)
 
 ---
 
-## Phase 11: Scraping Resilience
+## Phase 13: Scraping Resilience
 
 **Goal:** Booking.com scraping doesn't break silently. Failures are detected, logged, and handled.
 
@@ -340,7 +421,7 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 
 ---
 
-## Phase 12: End-to-End Polish
+## Phase 14: End-to-End Polish
 
 **Goal:** Full flow works reliably. Edge cases handled. Ready for demo.
 

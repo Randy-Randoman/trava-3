@@ -1,97 +1,222 @@
-# TRAVA 3 — Travel Planning with AI Agents + Excalidraw
+# Trava
 
-AI-powered travel planning: chat with an agent, search real hotels on Booking.com with affiliate links, and build visual trip boards on an Excalidraw canvas.
+> **AI travel planning on a visual canvas.** Chat with an agent, pull real hotel prices from Booking.com, and build your trip on an Excalidraw board — solo or with a group.
 
-**What's new vs trava-2:** LangGraph agent (swappable LLM), modular skills system, incremental board updates (append/remove instead of full replace), agent can read the board, Booking.com scraping with CJ affiliate links.
+🌐 Project landing page: **[trava-travel.com](https://www.trava-travel.com/)**
+
+## What it is
+
+Group travel planning is messy. Shared Google Docs don't scale past three people, every planner tool locks you into its own database, and LLM chat is great for research but forgets everything the moment you close the tab.
+
+Trava is a different shape: a **chat agent + a shared visual canvas**. You tell the agent what you want ("find us a 3-night stay in Lisbon under €150 per night"), it hits Booking.com for real prices and drops cards onto an Excalidraw board. The agent *sees* the board, so it can reason about what's already there — add activities around an existing hotel, replace a pricey option, group by day — without wiping what you've placed.
+
+The agent is swappable (Gemini or Claude) and the tool layer is modular: each capability is a Python package in `skills/` that exports a list of LangChain tools and a prompt. Add a folder, restart, done.
+
+## Status
+
+**Self-hosted only.** There is no hosted version and there won't be one — you'll set up Supabase and your own LLM + search keys. Early single-maintainer project, runs locally today, opened for collaboration.
+
+## Features
+
+- Chat agent with swappable LLM (Gemini or Claude)
+- Real-time Booking.com search via Playwright — real hotels, real prices
+- Incremental board edits: the agent appends or removes cards instead of replacing the whole board
+- Excalidraw canvas — drag, draw, group, annotate alongside the agent
+- Shareable read-only board links
+- Supabase for auth, DB, and storage
+- Pluggable skill system — add a tool by adding a folder
+
+## Requirements
+
+**This project is self-hosted. You bring your own Supabase, LLM, and search credentials. Expect ~15–30 min to get the external services provisioned on free tiers.**
+
+### Local tooling
+
+- Node.js 18+
+- Python 3.11+
+- macOS / Linux tested; Windows via WSL should work but is unverified
+
+### External services you must provision yourself
+
+All have free tiers sufficient for local use.
+
+- **Supabase project** — auth, Postgres, storage bucket for canvas images. Walkthrough: [`docs/supabase-setup.md`](docs/supabase-setup.md).
+- **One LLM provider** — either `GOOGLE_API_KEY` (Gemini via [AI Studio](https://aistudio.google.com), free tier) **or** `ANTHROPIC_API_KEY` (Claude via [console.anthropic.com](https://console.anthropic.com), paid). Set `LLM_PROVIDER=google|anthropic`.
+- **Tavily** — `TAVILY_API_KEY` for web + image search (free tier at [tavily.com](https://tavily.com)).
+
+Pointers and signup links: [`docs/services-setup.md`](docs/services-setup.md).
+
+## Quickstart
+
+```bash
+# 1. Clone and configure env
+git clone <your-fork-url> trava && cd trava
+cp .env.example .env
+# Fill in the values — see docs/supabase-setup.md and docs/services-setup.md
+
+# 2. Backend
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+playwright install chromium
+uvicorn main:app --reload            # http://localhost:8000
+
+# 3. Frontend (in a second terminal)
+cd frontend
+npm install
+ln -s ../.env .env.local             # frontend reads NEXT_PUBLIC_* from the same file
+npm run dev                          # http://localhost:3000
+
+# 4. Database — run the migrations once
+# Paste each of backend/migrations/001…007.sql into the Supabase SQL Editor in order.
+# Full walkthrough: docs/supabase-setup.md
+```
+
+Open [http://localhost:3000](http://localhost:3000) and sign up.
+
+## Usage walkthrough
+
+Your first trip end-to-end:
+
+1. **Sign up** at [http://localhost:3000](http://localhost:3000). Supabase sends a confirmation email.
+2. **Create a trip** from the dashboard — give it a name like "Lisbon weekend."
+3. **Ask the agent** in the chat panel: *"Find me a 3-night stay in Lisbon under €150 per night, something boutique."*
+4. **Watch it search.** The agent calls `booking_search`, parses results, and drops hotel cards onto the Excalidraw board with real prices and booking links.
+5. **Iterate.** Ask for activities: *"Add a food tour on day 2 and a day trip to Sintra on day 3."* The agent appends to the existing board instead of starting over.
+6. **Share.** Hit the share button to get a read-only link — the recipient sees the board without needing an account.
 
 ## Architecture
 
 ```
-frontend/          Next.js 16 + React 19 + Tailwind (35% chat / 65% Excalidraw)
-backend/           FastAPI + LangGraph agent
-skills/            Modular tool packages (booking, board, web_search)
+frontend/   Next.js 16 + React 19 + Tailwind (~35% chat, ~65% Excalidraw)
+backend/    FastAPI + LangGraph ReAct agent
+skills/     Auto-discovered tool packages (booking, board, web_search)
 ```
 
-- **Frontend** — dashboard, chat panel, Excalidraw canvas. Copied from trava-2.
-- **Backend** — FastAPI API, LangGraph ReAct agent, Supabase (Postgres + Auth).
-- **Skills** — auto-discovered Python packages. Each exports `TOOLS` + `PROMPT`. Adding a skill = adding a folder.
+- **Frontend** — dashboard, chat panel, Excalidraw canvas, shareable boards.
+- **Backend** — FastAPI routes for trips + SSE chat, LangGraph agent, Supabase client.
+- **Skills** — each skill is a Python package that exports a `TOOLS` list and a `PROMPT` string. Auto-discovered at agent startup.
 
-See `architecture.md` for full details, `plan.md` for implementation phases.
+```mermaid
+flowchart LR
+    user([User in browser])
+    ext([MCP client<br/>Claude Code / Cowork])
 
-## Setup
+    subgraph FE["Frontend · Next.js"]
+        ui["Dashboard · Chat · Excalidraw board"]
+        proxy["/api/image-proxy"]
+    end
 
-### Prerequisites
+    subgraph BE["Backend · FastAPI"]
+        api["REST API<br/>trips · canvas · share"]
+        chat["/chat/stream (SSE)"]
+        mcp["/mcp"]
+        agent["LangGraph ReAct agent"]
+        subgraph SK["Skills"]
+            booking["booking"]
+            board["board"]
+            web["web_search"]
+        end
+        transformer["Transformer<br/>board items → Excalidraw"]
+    end
 
-- Node.js 18+
-- Python 3.11+
-- A Supabase project (with migrations applied)
+    subgraph SB["Supabase"]
+        auth["Auth (JWT)"]
+        db[("Postgres<br/>trips · canvas_states · messages")]
+        storage[("Storage<br/>canvas-images")]
+    end
 
-### 1. Environment
+    llm{{"LLM<br/>Gemini / Claude"}}
+    bcom[("Booking.com")]
+    tavily[("Tavily")]
+    imgs[("Image hosts")]
 
-```bash
-cp .env.example .env
-# Fill in your keys (see .env.example for all vars)
+    user --> ui
+    ui -- "login" --> auth
+    ui -- "upload images" --> storage
+    ui -- "Bearer JWT" --> api
+    ui -- "Bearer JWT" --> chat
+    ui --> proxy --> imgs
+    chat --> agent
+    agent <--> llm
+    agent --> SK
+    booking -- "Playwright" --> bcom
+    web --> tavily
+    board --> transformer --> db
+    api --> db
+    api -. "verify JWT (JWKS)" .-> auth
+
+    ext -. "OAuth 2.1 via Supabase Auth (planned)" .-> auth
+    ext -. "Bearer token (planned)" .-> mcp
+    mcp -. "planned" .-> SK
+    db -. "Realtime (planned)" .-> ui
 ```
 
-### 2. Backend
+## Adding a skill
 
-```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+Skills are the extensibility hook. Every capability the agent has — searching Booking.com, reading the board, web search — is a skill. Adding one is ~20 lines.
 
-# Install Playwright browsers (needed for Booking.com search)
-playwright install chromium
+1. Make a new folder under `skills/`, e.g. `skills/weather/`.
+2. Create `skills/weather/__init__.py`:
 
-# Start the server
-uvicorn main:app --reload --port 8000
-```
+   ```python
+   from .tools import get_weather
 
-### 3. Frontend
+   TOOLS = [get_weather]
+   PROMPT = "You can call get_weather(city) to fetch the forecast. Use it when the user asks about weather."
+   ```
 
-```bash
-cd frontend
-npm install
-cp ../.env .env.local   # Frontend needs NEXT_PUBLIC_* vars
-npm run dev
-```
+3. Create `skills/weather/tools.py`:
 
-Frontend: http://localhost:3000
-Backend: http://localhost:8000
+   ```python
+   from langchain_core.tools import tool
 
-### 4. Database
+   @tool
+   def get_weather(city: str) -> str:
+       """Return a forecast summary for the given city."""
+       # ... call your weather API ...
+       return f"Sunny in {city}, 22°C"
+   ```
 
-Run migrations against your Supabase project (SQL Editor or CLI):
+4. Restart the backend. `skills/__init__.py` auto-discovers the new package and the agent picks up the tool + prompt on next boot.
 
-```
-backend/migrations/001_initial_schema.sql
-backend/migrations/002_rls_policies.sql
-backend/migrations/003_chat_messages.sql
-backend/migrations/004_revise_chat_schema.sql
-backend/migrations/005_board_items.sql
-```
+That's the contract. For a real example, look at `skills/booking/` or `skills/web_search/`.
 
-## Environment Variables
+## Using with Claude Code / Claude Cowork (experimental)
+
+The skills are designed to be reusable outside the bundled LangGraph agent. Anthropic's **Claude Code** (CLI) and **Claude Cowork** (desktop agent) both consume tools via [MCP](https://modelcontextprotocol.io/), so a thin MCP server wrapping the existing skills would let either driver the trip board directly.
+
+The wrapper doesn't exist yet — it's a planned follow-up (see open issues). Specifically it would:
+
+- Wrap the `TOOLS` from each skill as MCP tools
+- Replace the agent's `InjectedState("trip_id")` with an explicit `trip_id` argument
+- Reuse `backend/app/core/auth.py` for JWT-based ownership checks
+
+Contributions welcome.
+
+## Environment variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `SUPABASE_URL` | Yes | Supabase project URL |
 | `SUPABASE_SERVICE_KEY` | Yes | Supabase service role key (backend) |
-| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Same URL, for frontend |
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Same URL, for the frontend |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anon key (frontend) |
-| `GOOGLE_API_KEY` | For Gemini | langchain-google-genai |
-| `ANTHROPIC_API_KEY` | For Claude | langchain-anthropic |
-| `TAVILY_API_KEY` | For search | Web + image search |
-| `CJ_PID` / `CJ_AID` | For affiliate | CJ Commission Junction |
+| `LLM_PROVIDER` | Yes | `google` or `anthropic` |
+| `GOOGLE_API_KEY` | If Gemini | [AI Studio](https://aistudio.google.com) |
+| `ANTHROPIC_API_KEY` | If Claude | [console.anthropic.com](https://console.anthropic.com) |
+| `TAVILY_API_KEY` | Yes | [tavily.com](https://tavily.com) — web + image search |
+| `NEXT_PUBLIC_BACKEND_URL` | Yes | Usually `http://localhost:8000` in dev |
 
-## Project Structure
+See `.env.example` for the full template.
+
+## Project structure
 
 ```
-trava-3/
+trava/
 ├── frontend/                   # Next.js app
 │   └── src/
-│       ├── app/                # Pages (home, dashboard, login)
+│       ├── app/                # Pages (home, dashboard, login, board)
 │       ├── components/         # Canvas, chat, auth
 │       ├── lib/                # API helpers, hooks, auth
 │       └── types/              # TypeScript types
@@ -101,20 +226,42 @@ trava-3/
 │   ├── app/
 │   │   ├── api/                # Routes (trips, chat)
 │   │   ├── agent/              # LangGraph graph + state
-│   │   ├── core/               # Config, prompts, templates
-│   │   ├── logic/              # Transformer (Excalidraw generation)
+│   │   ├── core/               # Config, prompts, templates, auth
+│   │   ├── logic/              # Transformer (Excalidraw element generation)
 │   │   ├── models/             # Pydantic schemas
 │   │   └── services/           # Database, Playwright
-│   └── migrations/             # SQL migrations (001-005)
+│   └── migrations/             # SQL migrations (001–007)
 │
-├── skills/                     # Skill modules (auto-discovered)
-│   ├── booking/                # Booking.com search + CJ affiliate
+├── skills/                     # Skill packages (auto-discovered)
+│   ├── booking/                # Booking.com search
 │   ├── board/                  # Board read/add/remove/clear
 │   └── web_search/             # Tavily web + image search
 │
-├── .env                        # Secrets (not committed)
-├── docker-compose.yml          # Docker setup
-├── idea.md                     # Product vision
-├── architecture.md             # Technical architecture
-└── plan.md                     # Implementation plan + status
+├── tests/unit/                 # Pytest suite (~55 tests)
+├── docs/                       # Contributor docs
+├── .env.example                # Environment template
+└── docker-compose.yml          # Docker setup (local)
 ```
+
+## Tests
+
+```bash
+source backend/.venv/bin/activate
+python -m pytest tests/unit/ -v
+```
+
+~55 unit tests covering URL building, URL cleaning, auth, share tokens, and models. Runs in under a second. Integration / E2E tests are not included.
+
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). TL;DR: open an issue before a big PR, match existing code style, add a test if the change is non-trivial.
+
+## Design docs
+
+- [`docs/plan.md`](docs/plan.md) — implementation phases (running log)
+
+## License
+
+[MIT](LICENSE). Copyright © 2026 Pitt Hoeher & Joshua Wehr.
+
+Built on [Excalidraw](https://github.com/excalidraw/excalidraw) (MIT) and other open-source projects — see [`NOTICES.md`](NOTICES.md).

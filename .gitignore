@@ -20,7 +20,12 @@ venv/
 # Build
 dist/
 build/
+*.tsbuildinfo
 
 # Playwright
 playwright-report/
 test-results/
+playwright/.cache/
+
+# Claude Code local settings
+.claude/
