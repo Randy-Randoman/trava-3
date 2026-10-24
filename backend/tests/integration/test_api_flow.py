@@ -59,7 +59,6 @@ async def test_other_user_cannot_save_canvas(client, user_b, trip_a):
     assert resp.status_code == 403
 
 
-@pytest.mark.xfail(strict=True, reason="app bug: GET /trips/{id}/canvas wraps the 403 HTTPException into a 500")
 async def test_other_user_cannot_load_canvas(client, user_b, trip_a):
     resp = await client.get(f"/trips/{trip_a['id']}/canvas", headers={"Authorization": f"Bearer {user_b['jwt']}"})
     assert resp.status_code == 403
