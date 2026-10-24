@@ -10,12 +10,6 @@ services:
     environment:
       - PORT=8000
       - ALLOWED_ORIGINS=http://localhost:3000
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - TAVILY_API_KEY=${TAVILY_API_KEY}
 
   frontend:
     build:
