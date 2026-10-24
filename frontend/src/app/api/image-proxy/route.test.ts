@@ -61,6 +61,11 @@ describe('image proxy', () => {
     'http://[fd00::1]/a.png',
     'http://[fe80::1]/a.png',
     'http://[::ffff:127.0.0.1]/a.png',
+    'http://100.64.0.1/a.png',
+    'http://198.18.0.1/a.png',
+    'http://224.0.0.1/a.png',
+    'http://[64:ff9b::a00:1]/a.png',
+    'http://[2002:a00:1::]/a.png',
     'http://internal.example.com/a.png',
   ])('blocks internal address %s', async (url) => {
     const res = await proxy(url);

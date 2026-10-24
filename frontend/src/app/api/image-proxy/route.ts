@@ -23,7 +23,13 @@ blockedAddresses.addSubnet('10.0.0.0', 8, 'ipv4');
 blockedAddresses.addSubnet('172.16.0.0', 12, 'ipv4');
 blockedAddresses.addSubnet('192.168.0.0', 16, 'ipv4');
 blockedAddresses.addSubnet('169.254.0.0', 16, 'ipv4');
+blockedAddresses.addSubnet('100.64.0.0', 10, 'ipv4'); // carrier-grade NAT
+blockedAddresses.addSubnet('192.0.0.0', 24, 'ipv4');
+blockedAddresses.addSubnet('198.18.0.0', 15, 'ipv4');
+blockedAddresses.addSubnet('224.0.0.0', 3, 'ipv4'); // multicast + reserved
 blockedAddresses.addAddress('::', 'ipv6');
+blockedAddresses.addSubnet('64:ff9b::', 96, 'ipv6'); // NAT64
+blockedAddresses.addSubnet('2002::', 16, 'ipv6'); // 6to4
 blockedAddresses.addAddress('::1', 'ipv6');
 blockedAddresses.addSubnet('fc00::', 7, 'ipv6');
 blockedAddresses.addSubnet('fe80::', 10, 'ipv6');
