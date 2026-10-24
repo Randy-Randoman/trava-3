@@ -342,9 +342,9 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 
 ### Manual steps (user must do — agent cannot)
 - Apply the security migration to the live Supabase project (`supabase link` + `supabase db push`, or the SQL editor)
-- GitHub: add a description and topics; keep Issues on for own tracking only
+- ~~GitHub: add a description and topics~~ ✅ (Issues stay on for own tracking only)
 - ~~Close stale issues #18, #19, #20~~ ✅ closed
-- Delete the stale `claude/debug-railway-error-NuJhs` branch and the local `worktree-agent-*` branches
+- ~~Delete the stale `claude/debug-railway-error-NuJhs` branch and the local `worktree-agent-*` branches~~ ✅ (its CORS-parsing fix moved into #51)
 
 ### Backlog (not this phase)
 - Store card images in Supabase storage instead of proxying them
