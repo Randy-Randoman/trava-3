@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Dashboard Page (Wave 4 - Issue #15)
+ * Dashboard Page
  *
  * User's home view showing all their trips as cards.
  * Features: View, Rename, Delete trips

@@ -3,9 +3,7 @@
  */
 
 import { supabase } from './supabase/client'
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+import { env } from './env'
 
 /**
  * Get auth headers with user ID
@@ -19,31 +17,6 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
     headers['Authorization'] = `Bearer ${session.access_token}`
   }
   return headers
-}
-
-interface ChatRequest {
-  message: string
-  history: Array<{ role: string; content: string }>
-}
-
-/**
- * Send a chat message to the backend
- */
-export async function sendChatMessage(request: ChatRequest): Promise<Response> {
-  const headers = await getAuthHeaders()
-  return fetch(`${BACKEND_URL}/chat`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(request),
-  })
-}
-
-/**
- * Health check for backend
- */
-export async function checkBackendHealth(): Promise<{ status: string }> {
-  const response = await fetch(`${BACKEND_URL}/health`)
-  return response.json()
 }
 
 /**
@@ -63,7 +36,7 @@ export interface CanvasState {
  */
 export async function getCanvasState(tripId: string): Promise<CanvasState> {
   const headers = await getAuthHeaders()
-  const response = await fetch(`${BACKEND_URL}/trips/${tripId}/canvas`, { headers })
+  const response = await fetch(`${env.backendUrl()}/trips/${tripId}/canvas`, { headers })
   if (!response.ok) {
     throw new Error(`Failed to load canvas: ${response.statusText}`)
   }
@@ -80,7 +53,7 @@ export async function saveCanvasState(
   appState?: Record<string, unknown>
 ): Promise<CanvasState> {
   const headers = await getAuthHeaders()
-  const response = await fetch(`${BACKEND_URL}/trips/${tripId}/canvas`, {
+  const response = await fetch(`${env.backendUrl()}/trips/${tripId}/canvas`, {
     method: 'PUT',
     headers,
     body: JSON.stringify({ elements, files, appState }),
@@ -92,25 +65,7 @@ export async function saveCanvasState(
 }
 
 /**
- * Get the latest trip ID
- */
-export interface LatestTripResponse {
-  trip_id: string
-  title: string
-  created_at: string | null
-}
-
-export async function getLatestTrip(): Promise<LatestTripResponse> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${BACKEND_URL}/trips/latest/id`, { headers })
-  if (!response.ok) {
-    throw new Error(`No trips found`)
-  }
-  return response.json()
-}
-
-/**
- * Dashboard API (Wave 4 - Issue #15)
+ * Dashboard API
  */
 
 export interface TripListItem {
@@ -133,7 +88,7 @@ export interface TripListResponse {
  */
 export async function getTrips(): Promise<TripListResponse> {
   const headers = await getAuthHeaders()
-  const response = await fetch(`${BACKEND_URL}/trips`, { headers })
+  const response = await fetch(`${env.backendUrl()}/trips`, { headers })
   if (!response.ok) {
     throw new Error(`Failed to fetch trips: ${response.statusText}`)
   }
@@ -148,7 +103,7 @@ export async function updateTrip(
   data: { title?: string; destination?: string; status?: string }
 ): Promise<{ id: string; title: string; status: string }> {
   const headers = await getAuthHeaders()
-  const response = await fetch(`${BACKEND_URL}/trips/${tripId}`, {
+  const response = await fetch(`${env.backendUrl()}/trips/${tripId}`, {
     method: 'PATCH',
     headers,
     body: JSON.stringify(data),
@@ -164,7 +119,7 @@ export async function updateTrip(
  */
 export async function deleteTrip(tripId: string): Promise<{ message: string; id: string }> {
   const headers = await getAuthHeaders()
-  const response = await fetch(`${BACKEND_URL}/trips/${tripId}`, {
+  const response = await fetch(`${env.backendUrl()}/trips/${tripId}`, {
     method: 'DELETE',
     headers,
   })
@@ -179,7 +134,7 @@ export async function deleteTrip(tripId: string): Promise<{ message: string; id:
  */
 export async function createTrip(data: { title?: string; destination?: string | null }): Promise<{ id: string; title: string; status: string }> {
   const headers = await getAuthHeaders()
-  const response = await fetch(`${BACKEND_URL}/trips`, {
+  const response = await fetch(`${env.backendUrl()}/trips`, {
     method: 'POST',
     headers,
     body: JSON.stringify(data),
@@ -191,7 +146,7 @@ export async function createTrip(data: { title?: string; destination?: string | 
 }
 
 /**
- * Budget API (Issue #19)
+ * Budget API
  */
 
 export interface BudgetItem {
@@ -208,7 +163,7 @@ export interface BudgetResponse {
 
 export async function getBudget(tripId: string): Promise<BudgetResponse> {
   const headers = await getAuthHeaders()
-  const response = await fetch(`${BACKEND_URL}/trips/${tripId}/budget`, { headers })
+  const response = await fetch(`${env.backendUrl()}/trips/${tripId}/budget`, { headers })
   if (!response.ok) {
     throw new Error(`Failed to fetch budget: ${response.statusText}`)
   }
@@ -216,12 +171,12 @@ export async function getBudget(tripId: string): Promise<BudgetResponse> {
 }
 
 /**
- * Share API (Issue #20)
+ * Share API
  */
 
 export async function shareTrip(tripId: string): Promise<{ share_token: string }> {
   const headers = await getAuthHeaders()
-  const response = await fetch(`${BACKEND_URL}/trips/${tripId}/share`, {
+  const response = await fetch(`${env.backendUrl()}/trips/${tripId}/share`, {
     method: 'POST',
     headers,
   })
@@ -239,7 +194,7 @@ export interface PublicBoardResponse {
 }
 
 export async function getPublicBoard(shareToken: string): Promise<PublicBoardResponse> {
-  const response = await fetch(`${BACKEND_URL}/trips/public/${shareToken}`)
+  const response = await fetch(`${env.backendUrl()}/trips/public/${shareToken}`)
   if (!response.ok) {
     throw new Error(`Board not found`)
   }
@@ -298,8 +253,7 @@ export async function uploadCanvasImage(
     }
 
     // Build public URL
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/canvas-images/${path}`
-    console.log(`[Upload] Uploaded ${fileId} → ${publicUrl}`)
+    const publicUrl = `${env.supabaseUrl()}/storage/v1/object/public/canvas-images/${path}`
     return publicUrl
   } catch (err) {
     console.error(`[Upload] Error uploading ${fileId}:`, err)

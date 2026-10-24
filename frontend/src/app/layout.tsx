@@ -18,7 +18,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="stylesheet" href="/excalidraw.css" />
         <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet" />
       </head>
       <body className="antialiased font-sans bg-retro-cream text-trava-black">

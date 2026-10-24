@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Public Board Page (Issue #20)
+ * Public Board Page
  *
  * Read-only view of a shared trip board — no authentication required.
  * Accessible at /board/:share_token
@@ -13,6 +13,7 @@ import { useParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getPublicBoard } from '@/lib/api'
 import { useExcalidrawHydration } from '@/lib/hooks'
+import '@excalidraw/excalidraw/index.css'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ExcalidrawAPI = any

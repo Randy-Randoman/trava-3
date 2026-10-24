@@ -1,18 +1,19 @@
 'use client'
 
 /**
- * BoardWrapper - Excalidraw Canvas Component (Issue #10)
+ * BoardWrapper - Excalidraw Canvas Component
  *
  * Features:
  * - Load canvas state from backend GET /trips/{id}/canvas
  * - Auto-save with 2s debounce on change
- * - Hydrates images from URLs via proxy (Issue #13)
+ * - Hydrates images from URLs via proxy
  */
 
 import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getCanvasState, saveCanvasState, uploadCanvasImage } from '@/lib/api'
 import { useExcalidrawHydration } from '@/lib/hooks'
+import '@excalidraw/excalidraw/index.css'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ExcalidrawAPI = any;
@@ -69,7 +70,6 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
       const data = await getCanvasState(tripId)
       // Store the original files with URLs for hydration
       originalFilesRef.current = data.files || {}
-      console.log('[BoardWrapper] Loaded files from backend:', Object.keys(originalFilesRef.current).length)
 
       setInitialData({
         elements: data.elements || [],
@@ -182,7 +182,6 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
         const filesToSave = await uploadNewFiles(tripId, files, originalFilesRef.current)
 
         await saveCanvasState(tripId, [...elements], filesToSave)
-        console.log('[BoardWrapper] Canvas flushed for share')
       } catch (err) {
         console.error('[BoardWrapper] Failed to flush canvas:', err)
       }
@@ -214,7 +213,6 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
         const filesToSave = await uploadNewFiles(tripId, files, originalFilesRef.current)
 
         await saveCanvasState(tripId, [...elements], filesToSave)
-        console.log('🎨 Canvas saved (images uploaded to storage)')
         // Notify other components (e.g. BudgetPanel) that the canvas changed
         window.dispatchEvent(new CustomEvent('canvas-saved', { detail: { tripId } }))
       } catch (err) {

@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * BudgetPanel - Floating budget overlay on the trip board (Issue #19)
+ * BudgetPanel - Floating budget overlay on the trip board
  *
  * Shows total spent vs. trip budget. Refreshes on canvas-updated events.
  */

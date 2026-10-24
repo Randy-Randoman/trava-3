@@ -109,7 +109,6 @@ export function useExcalidrawHydration() {
    */
   const setOriginalFiles = useCallback((files: Record<string, unknown>) => {
     stateRef.current.originalFiles = files as Record<string, OriginalFile>;
-    console.log('[Hydration] Received original files:', Object.keys(files).length);
   }, []);
 
   /**
@@ -124,19 +123,15 @@ export function useExcalidrawHydration() {
 
     const state = stateRef.current;
     if (state.isHydrating) {
-      console.log('[Hydration] Already hydrating, skipping...');
       return;
     }
 
     state.isHydrating = true;
-    console.log('[Hydration] Starting image hydration...');
 
     try {
       const elements = api.getSceneElements();
       // Use the original files from backend, not api.getFiles() which may have rejected them
       const originalFiles = state.originalFiles;
-
-      console.log('[Hydration] Elements:', elements.length, 'Original files:', Object.keys(originalFiles).length);
 
       // Find image elements that reference files with external URLs
       const imageElements = elements.filter(
@@ -153,27 +148,18 @@ export function useExcalidrawHydration() {
           // Check if we have this file in our original files from backend
           const file = originalFiles[el.fileId];
           if (!file) {
-            console.log(`[Hydration] File ${el.fileId} not found in original files`);
             return false;
           }
 
           // Check if dataURL is an external URL (not a base64 data URL)
-          const hasExternalUrl = isExternalUrl(file.dataURL);
-          if (hasExternalUrl) {
-            console.log(`[Hydration] Found external URL for ${el.fileId}: ${file.dataURL?.substring(0, 60)}...`);
-          }
-
-          return hasExternalUrl;
+          return isExternalUrl(file.dataURL);
         }
       );
 
       if (imageElements.length === 0) {
-        console.log('[Hydration] No images to hydrate');
         state.isHydrating = false;
         return;
       }
-
-      console.log(`[Hydration] Found ${imageElements.length} images to hydrate`);
 
       // Process images in parallel (with limit)
       const BATCH_SIZE = 5;
@@ -199,7 +185,6 @@ export function useExcalidrawHydration() {
 
             if (!fetchPromise) {
               fetchPromise = (async () => {
-                console.log(`[Hydration] Fetching image: ${imageUrl.substring(0, 60)}...`);
                 const result = await fetchImageAsDataUrl(imageUrl);
 
                 if (result) {
@@ -232,9 +217,7 @@ export function useExcalidrawHydration() {
 
       // Add the files to Excalidraw with base64 data
       if (filesToAdd.length > 0) {
-        console.log(`[Hydration] Adding ${filesToAdd.length} files to Excalidraw`);
         api.addFiles(filesToAdd);
-        console.log('[Hydration] Files added with base64 data');
       }
 
     } catch (error) {
@@ -242,13 +225,6 @@ export function useExcalidrawHydration() {
     } finally {
       state.isHydrating = false;
     }
-  }, []);
-
-  /**
-   * Check if hydration is in progress
-   */
-  const isHydrating = useCallback(() => {
-    return stateRef.current.isHydrating;
   }, []);
 
   /**
@@ -264,7 +240,6 @@ export function useExcalidrawHydration() {
     setExcalidrawApi,
     setOriginalFiles,
     hydrateImages,
-    isHydrating,
     clearCache,
   };
 }

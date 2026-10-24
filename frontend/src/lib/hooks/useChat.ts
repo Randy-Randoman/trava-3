@@ -3,8 +3,8 @@
 import { useState, useCallback, useEffect } from 'react'
 import { Message } from '@/types'
 import { supabase } from '@/lib/supabase/client'
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+import { env } from '@/lib/env'
+import { parseSse } from '@/lib/sse'
 
 interface UseChatOptions {
   tripId: string  // REQUIRED - conversation is linked to trip
@@ -23,17 +23,15 @@ export function useChat(options: UseChatOptions) {
 
     const loadMessages = async () => {
       try {
-        console.log(`📥 [Chat] Loading messages for trip: ${tripId}`)
         const { data: { session } } = await supabase.auth.getSession()
         const headers: Record<string, string> = {}
         if (session?.access_token) {
           headers['Authorization'] = `Bearer ${session.access_token}`
         }
-        const response = await fetch(`${BACKEND_URL}/chat/messages/${tripId}`, { headers })
+        const response = await fetch(`${env.backendUrl()}/chat/messages/${tripId}`, { headers })
 
         if (!response.ok) {
-          // Chat endpoint may not be implemented yet (501) — just start with empty messages
-          console.log(`[Chat] Messages endpoint returned ${response.status}, starting fresh`)
+          // No history available — start with empty messages
           return
         }
 
@@ -46,7 +44,6 @@ export function useChat(options: UseChatOptions) {
         }))
 
         setMessages(loadedMessages)
-        console.log(`✅ [Chat] Loaded ${loadedMessages.length} messages`)
       } catch (error) {
         console.error('Failed to load messages:', error)
       }
@@ -71,8 +68,6 @@ export function useChat(options: UseChatOptions) {
 
     try {
       // NO history sent - backend loads from database!
-      console.log(`📝 [Chat] Sending message for trip: ${tripId}`)
-
       // Call the streaming endpoint
       const { data: { session } } = await supabase.auth.getSession()
       const headers: Record<string, string> = {
@@ -81,11 +76,11 @@ export function useChat(options: UseChatOptions) {
       if (session?.access_token) {
         headers['Authorization'] = `Bearer ${session.access_token}`
       }
-      const response = await fetch(`${BACKEND_URL}/chat/stream`, {
+      const response = await fetch(`${env.backendUrl()}/chat/stream`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          trip_id: tripId,  // NEW - send trip_id instead of history
+          trip_id: tripId,
           message: content,
         }),
       })
@@ -104,59 +99,50 @@ export function useChat(options: UseChatOptions) {
       let assistantContent = ''
       const assistantMessageId = `assistant-${Date.now()}`
 
-      // Process the stream
+      // Process the stream; partial lines are carried over to the next read
+      let rest = ''
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
-        const chunk = decoder.decode(value)
-        const lines = chunk.split('\n')
+        const parsed = parseSse(rest, decoder.decode(value, { stream: true }))
+        rest = parsed.rest
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6))
+        for (const data of parsed.events) {
+          if (data.type === 'status') {
+            setStatus(data.content)
+          } else if (data.type === 'text') {
+            assistantContent = data.content
 
-              if (data.type === 'status') {
-                setStatus(data.content)
-              } else if (data.type === 'text') {
-                assistantContent = data.content
-
-                // Add or update assistant message
-                setMessages((prev) => {
-                  const existing = prev.find((m) => m.id === assistantMessageId)
-                  if (existing) {
-                    return prev.map((m) =>
-                      m.id === assistantMessageId
-                        ? { ...m, content: assistantContent }
-                        : m
-                    )
-                  }
-                  return [
-                    ...prev,
-                    {
-                      id: assistantMessageId,
-                      role: 'assistant',
-                      content: assistantContent,
-                      timestamp: new Date().toISOString(),
-                    } as Message,
-                  ]
-                })
-              } else if (data.type === 'canvas_updated') {
-                // Canvas already updated server-side. Just reload.
-                window.dispatchEvent(new CustomEvent('canvas-updated', { detail: { tripId } }))
-              } else if (data.type === 'board_ready') {
-                console.log('✅ Board ready signal received')
-                setBoardReady(true)
-              } else if (data.type === 'done') {
-                setStatus('')
-              } else if (data.type === 'error') {
-                throw new Error(data.content)
+            // Add or update assistant message
+            setMessages((prev) => {
+              const existing = prev.find((m) => m.id === assistantMessageId)
+              if (existing) {
+                return prev.map((m) =>
+                  m.id === assistantMessageId
+                    ? { ...m, content: assistantContent }
+                    : m
+                )
               }
-            } catch (e) {
-              if (e instanceof SyntaxError) continue // Ignore incomplete JSON chunks
-              throw e // Re-throw real errors (e.g. from error events)
-            }
+              return [
+                ...prev,
+                {
+                  id: assistantMessageId,
+                  role: 'assistant',
+                  content: assistantContent,
+                  timestamp: new Date().toISOString(),
+                } as Message,
+              ]
+            })
+          } else if (data.type === 'canvas_updated') {
+            // Canvas already updated server-side. Just reload.
+            window.dispatchEvent(new CustomEvent('canvas-updated', { detail: { tripId } }))
+          } else if (data.type === 'board_ready') {
+            setBoardReady(true)
+          } else if (data.type === 'done') {
+            setStatus('')
+          } else if (data.type === 'error') {
+            throw new Error(data.content)
           }
         }
       }

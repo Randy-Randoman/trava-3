@@ -4,8 +4,6 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
 
-const AUTH_ENABLED = true
-
 interface ProtectedRouteProps {
   children: React.ReactNode
 }
@@ -15,14 +13,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const router = useRouter()
 
   useEffect(() => {
-    if (AUTH_ENABLED && !loading && !user) {
+    if (!loading && !user) {
       router.push('/login')
     }
   }, [user, loading, router])
-
-  if (!AUTH_ENABLED) {
-    return <>{children}</>
-  }
 
   if (loading) {
     return (
