@@ -2,6 +2,8 @@
 
 import logging
 from urllib.parse import quote, urlencode, urlparse, urlunparse
+
+from app.services.playwright import get_page
 from .models import SearchParams, Hotel
 
 logger = logging.getLogger(__name__)
@@ -103,9 +105,6 @@ def append_booking_params(hotel_url: str, params: SearchParams) -> str:
 
 async def search_booking(params: SearchParams) -> list[Hotel]:
     """Search Booking.com and return hotel results."""
-    # Lazy import: app.services is only on sys.path when the backend is running
-    from app.services.playwright import get_page
-
     url = build_search_url(params)
     logger.info(f"Booking search URL: {url}")
 

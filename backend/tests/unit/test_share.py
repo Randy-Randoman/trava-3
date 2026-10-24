@@ -1,18 +1,10 @@
 """Tests for trip sharing endpoints (Issue #20)."""
 
-import sys
 import uuid
-from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
-
-# backend/main.py uses `from app.services...` imports, so we need
-# the backend directory on sys.path for those to resolve.
-_backend_dir = str(Path(__file__).resolve().parents[2] / "backend")
-if _backend_dir not in sys.path:
-    sys.path.insert(0, _backend_dir)
 
 FAKE_USER_ID = "user-00000000-0000-0000-0000-000000000000"
 

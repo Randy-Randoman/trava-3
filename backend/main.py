@@ -8,13 +8,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from dotenv import load_dotenv
 
 from app.services.playwright import shutdown_playwright, warmup_playwright
 from app.core.auth import require_auth
-
-# Load environment variables from root .env
-load_dotenv(dotenv_path="../.env")
 
 
 @asynccontextmanager

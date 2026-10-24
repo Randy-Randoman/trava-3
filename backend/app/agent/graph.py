@@ -4,8 +4,6 @@ LangGraph ReAct agent graph.
 Pattern: START -> agent_node -> should_continue? -> tool_node (loop) or END
 """
 
-import sys
-from pathlib import Path
 from langchain_core.messages import SystemMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
@@ -13,12 +11,6 @@ from langgraph.prebuilt import ToolNode
 from app.agent.state import AgentState
 from app.core.config import settings
 from app.core.prompts import build_system_prompt
-
-# Ensure the repo root is on sys.path so `skills` is importable.
-# The backend runs from backend/, but skills/ lives at the repo root.
-_repo_root = str(Path(__file__).resolve().parents[3])
-if _repo_root not in sys.path:
-    sys.path.insert(0, _repo_root)
 
 from skills import load_all_skills
 

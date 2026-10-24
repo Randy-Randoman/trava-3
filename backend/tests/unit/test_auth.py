@@ -1,19 +1,12 @@
 """Tests for JWT authentication helpers (app.core.auth)."""
 
-import sys
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import jwt as pyjwt
 import pytest
 from fastapi import HTTPException
 
-# Ensure the backend directory is on sys.path so `app.*` imports resolve.
-_backend_dir = str(Path(__file__).resolve().parents[2] / "backend")
-if _backend_dir not in sys.path:
-    sys.path.insert(0, _backend_dir)
-
-import app.core.auth as auth_module  # noqa: E402
+import app.core.auth as auth_module
 
 
 # ---------------------------------------------------------------------------
