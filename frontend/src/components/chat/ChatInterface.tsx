@@ -72,7 +72,7 @@ export function ChatInterface({ tripId, onDashboard }: ChatInterfaceProps) {
             </div>
             <h2 className="text-xl font-black text-trava-black mb-2 uppercase">Welcome to TRAVA!</h2>
             <p className="text-gray-500 text-sm max-w-xs font-medium">
-              Tell me about your dream trip and I'll help you plan the perfect itinerary.
+              Tell me about your dream trip and I&apos;ll help you plan the perfect itinerary.
             </p>
           </div>
         ) : (

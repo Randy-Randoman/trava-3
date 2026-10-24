@@ -8,6 +8,7 @@
  */
 
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getPublicBoard } from '@/lib/api'
@@ -74,9 +75,9 @@ export default function PublicBoardPage() {
     return (
       <div className="min-h-screen bg-retro-cream flex flex-col items-center justify-center gap-4">
         <p className="text-trava-black font-bold text-lg">{error}</p>
-        <a href="/" className="text-sm underline text-gray-500 hover:text-trava-black">
+        <Link href="/" className="text-sm underline text-gray-500 hover:text-trava-black">
           Go to Trava
-        </a>
+        </Link>
       </div>
     )
   }
