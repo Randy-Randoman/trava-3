@@ -4,9 +4,9 @@ FROM node:20-alpine AS base
 FROM base AS deps
 WORKDIR /app
 
-# Copy package files and npmrc for legacy peer deps
-COPY package.json package-lock.json* .npmrc* ./
-RUN npm install --legacy-peer-deps
+# Copy package files and install exact versions from the lockfile
+COPY package.json package-lock.json ./
+RUN npm ci
 
 # Rebuild the source code only when needed
 FROM base AS builder

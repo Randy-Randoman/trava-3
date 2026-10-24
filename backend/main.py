@@ -15,6 +15,8 @@ from app.services.playwright import shutdown_playwright, warmup_playwright
 logging.basicConfig(format="%(levelname)s %(name)s: %(message)s")
 logging.getLogger("app").setLevel(logging.INFO)
 logging.getLogger("skills").setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 @asynccontextmanager
@@ -36,7 +38,9 @@ app = FastAPI(
 
 # Configure CORS for frontend communication
 # ALLOWED_ORIGINS env var should be comma-separated list of domains
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+logger.info("CORS allowed origins: %s", allowed_origins)
 
 app.add_middleware(
     CORSMiddleware,

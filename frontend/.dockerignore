@@ -2,9 +2,12 @@ node_modules
 .next
 .git
 *.md
-.env
-.env.*
+.env*
 npm-debug.log
 .DS_Store
 coverage
 .nyc_output
+.eslintcache
+*.tsbuildinfo
+src/**/*.test.ts
+vitest.config.ts
