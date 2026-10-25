@@ -201,7 +201,10 @@ The backend serves a remote MCP server at `/mcp`, so Claude Code, claude.ai, Cla
 3. **Ask:** *"Create a trip 'Lisbon' and add 3 hotels under €150 for 12-15 May."*
 4. **Open the board** in the app. It updates live while the agent works.
 
-**claude.ai / Claude Cowork / ChatGPT:** add a custom connector with `<PUBLIC_BASE_URL>/mcp`. This needs a public HTTPS URL (e.g. a Railway deploy); `localhost` only works for Claude Code on the same machine.
+**claude.ai / Claude Cowork / ChatGPT** need a public HTTPS URL (e.g. a Railway deploy); `localhost` only works for Claude Code on the same machine. Menu paths as of September 2026:
+
+- **claude.ai / Cowork:** Customize → Connectors → + → Add custom connector, paste `<PUBLIC_BASE_URL>/mcp`, Add, then Connect; log in and press **Allow**.
+- **ChatGPT:** Settings → Security and login → turn on Developer mode; then Plugins → +: a name, MCP server URL `<PUBLIC_BASE_URL>/mcp`, Authentication **OAuth**; log in and press **Allow**.
 
 ### Tools
 
@@ -228,6 +231,7 @@ A connected app acts as you on your trips. Disconnect it under **Connected apps*
 - No rate limiting on agent calls: Booking.com scraping and Tavily usage are on you.
 - An upstream Supabase bug ([supabase/auth#2820](https://github.com/supabase/auth/issues/2820)) may break the consent step for some public MCP clients.
 - If you sign up in the middle of connecting, you end up on the dashboard. Reconnect from the client afterwards.
+- Supabase gives every token the audience `authenticated` (it ignores RFC 8707 `resource`), so an agent's token is a full project token: until it expires it also works directly against Supabase's Data API, limited by row-level security to your own data. Disconnecting stops `/mcp` at once; direct Supabase access ends when the token expires (the project's JWT expiry, 1 hour by default).
 
 ## Environment variables
 

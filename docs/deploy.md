@@ -118,7 +118,7 @@ The backend image includes Chromium, so Booking.com search works inside the cont
 
 The MCP server at `/mcp` is part of the backend service, so there's nothing extra to deploy. How to connect a client: [README](../README.md#using-with-claude-code--mcp).
 
-External agents (Claude Code, Claude Cowork, claude.ai) connect to TRAVA with OAuth 2.1. Supabase Auth is the authorization server: it registers the clients, runs the sign-in and issues the tokens. TRAVA hosts the consent page (`/oauth/consent`) and is the resource server. Users see and disconnect their agents under **Connected apps** on the dashboard.
+External agents (Claude Code, Claude Cowork, claude.ai, ChatGPT) connect to TRAVA with OAuth 2.1. Supabase Auth is the authorization server: it registers the clients, runs the sign-in and issues the tokens. TRAVA hosts the consent page (`/oauth/consent`) and is the resource server. Users see and disconnect their agents under **Connected apps** on the dashboard.
 
 The backend serves the protected resource metadata (RFC 9728) at `/.well-known/oauth-protected-resource` (and `…/mcp`). It names the resource `<PUBLIC_BASE_URL>/mcp`, which clients check against the URL they were given, so `PUBLIC_BASE_URL` must be the backend's public URL exactly. `/mcp` also only accepts requests whose `Host` header is `PUBLIC_BASE_URL`'s host (or `localhost`/`127.0.0.1`); any other host gets HTTP 421. If you use a custom domain, set `PUBLIC_BASE_URL` to it.
 
@@ -131,11 +131,22 @@ Nothing in the repo applies these.
 3. On the same page, turn on **Allow dynamic client registration**. Agents register themselves; a client gets nothing until a user signs in and presses Allow.
 4. **Project Settings → JWT Keys: the current signing key must be asymmetric** (ES256 or RS256). The backend verifies agent tokens against the project's JWKS and can't verify HS256 tokens.
 
+The token issuer is `<SUPABASE_URL>/auth/v1`. If you add a Supabase custom domain, the issuer changes with it, so set the backend's `SUPABASE_URL` to the custom domain at the same time, or every agent is refused.
+
 ### Migrations
 
 Agents need migrations `20260101000009_agent_grants.sql` (the grant check below) and `20260101000010_canvas_realtime.sql` (open boards reload when an agent changes them, via Supabase Realtime). `supabase db push` applies both.
 
 Access tokens live as long as the project's JWT expiry, but disconnecting an app takes effect at once: on every agent request the backend checks the token's issuer, audience and `client_id`, then calls `public.agent_grant_active` (migration `20260101000009_agent_grants.sql`) to check that the consent isn't revoked, the client isn't deleted and the session still exists.
+
+### Verify the agent connection (once, after a deploy)
+
+1. `curl -i -X POST <PUBLIC_BASE_URL>/mcp` answers `401` with a `WWW-Authenticate` header naming `resource_metadata`, and that URL answers JSON naming `<SUPABASE_URL>/auth/v1`.
+2. **Claude Code:** `claude mcp add --transport http trava <PUBLIC_BASE_URL>/mcp`, start a session, run `/mcp`, pick `trava`, Authenticate; log in, press Allow. Ask it to list your trips.
+3. **claude.ai** and **ChatGPT:** connect as described in the [README](../README.md#using-with-claude-code--mcp) and call a tool in a chat.
+4. Disconnect one client under **Connected apps**; its next call fails with `401`.
+
+If the consent page says the request expired or was already used on a fresh connect, it's likely the open Supabase bug [supabase/auth#2820](https://github.com/supabase/auth/issues/2820).
 
 ## Troubleshooting
 
