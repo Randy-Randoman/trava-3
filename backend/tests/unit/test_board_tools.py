@@ -5,7 +5,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from skills.board.tools import board_add_items, board_clear, board_read, board_remove_items
+from skills.board.tools import (
+    add_items,
+    board_add_items,
+    board_clear,
+    board_read,
+    board_remove_items,
+    clear_board,
+    read_board,
+    remove_items,
+)
 
 TRIP_ID = "trip-1"
 
@@ -47,23 +56,49 @@ def fake_cards():
         yield m
 
 
+# Every case runs against both the @tool wrapper and the plain function it calls.
+@pytest.fixture(params=["tool", "plain"])
+def via(request):
+    return request.param
+
+
+@pytest.fixture
+def read(via):
+    return board_read.coroutine if via == "tool" else read_board
+
+
+@pytest.fixture
+def add(via):
+    return board_add_items.coroutine if via == "tool" else add_items
+
+
+@pytest.fixture
+def remove(via):
+    return board_remove_items.coroutine if via == "tool" else remove_items
+
+
+@pytest.fixture
+def clear(via):
+    return board_clear.coroutine if via == "tool" else clear_board
+
+
 def saved_board_items(db):
     return db.update_board_items.call_args.args[1]
 
 
 class TestBoardRead:
-    async def test_empty_board(self, patch_db):
+    async def test_empty_board(self, patch_db, read):
         patch_db(make_db())
-        result = await board_read.coroutine(trip_id=TRIP_ID)
+        result = await read(trip_id=TRIP_ID)
         assert result == "Board is empty. No items have been added yet."
 
-    async def test_summary_of_several_items(self, patch_db):
+    async def test_summary_of_several_items(self, patch_db, read):
         patch_db(make_db(board_items=[
             {"id": "abcd1234", "type": "stay", "name": "Hotel Roma",
              "data": {"price": "€120", "rating": 8.5, "review_count": 300}},
             {"id": "efgh5678", "type": "activity", "name": "Colosseum Tour", "data": {}},
         ]))
-        result = await board_read.coroutine(trip_id=TRIP_ID)
+        result = await read(trip_id=TRIP_ID)
         assert result == (
             "Board has 2 item(s):\n"
             "- [abcd] STAY: Hotel Roma (€120, Rating: 8.5, 300 reviews)\n"
@@ -72,14 +107,14 @@ class TestBoardRead:
 
 
 class TestBoardAddItems:
-    async def test_adds_to_empty_board_with_generated_ids(self, patch_db, fake_cards):
+    async def test_adds_to_empty_board_with_generated_ids(self, patch_db, fake_cards, add):
         db = patch_db(make_db(canvas={
             "scene_elements": [{"id": "welcome-text"}],
             "scene_files": {"old": {}},
         }))
         items = json.dumps([{"name": "Hotel Roma", "type": "stay", "price": "€120", "day": 1}])
 
-        result = await board_add_items.coroutine(items=items, trip_id=TRIP_ID)
+        result = await add(items=items, trip_id=TRIP_ID)
 
         assert result == "Added 1 item(s) to the board: Hotel Roma"
         saved = saved_board_items(db)
@@ -94,13 +129,13 @@ class TestBoardAddItems:
         assert canvas_kwargs["scene_elements"] == [{"id": "card-0", "customData": {"agentPlaced": True}}]
         assert canvas_kwargs["scene_files"] == {"file-new": {}}
 
-    async def test_single_object_is_accepted(self, patch_db, fake_cards):
+    async def test_single_object_is_accepted(self, patch_db, fake_cards, add):
         db = patch_db(make_db())
-        result = await board_add_items.coroutine(items='{"name": "Solo"}', trip_id=TRIP_ID)
+        result = await add(items='{"name": "Solo"}', trip_id=TRIP_ID)
         assert result == "Added 1 item(s) to the board: Solo"
         assert saved_board_items(db)[0]["type"] == "stay"  # default type
 
-    async def test_keeps_existing_items_and_appends_new_ones(self, patch_db, fake_cards):
+    async def test_keeps_existing_items_and_appends_new_ones(self, patch_db, fake_cards, add):
         existing = [{
             "id": "old11111", "type": "stay", "name": "Old Hotel", "day": 1,
             "excalidraw_group_id": "old-group", "data": {"price": "€80"},
@@ -115,7 +150,7 @@ class TestBoardAddItems:
         }))
         items = json.dumps([{"name": "New Hotel", "type": "stay", "day": 1}])
 
-        result = await board_add_items.coroutine(items=items, trip_id=TRIP_ID)
+        result = await add(items=items, trip_id=TRIP_ID)
 
         assert result == "Added 1 item(s) to the board: New Hotel"
         saved = saved_board_items(db)
@@ -123,23 +158,24 @@ class TestBoardAddItems:
         assert [bi["name"] for bi in saved] == ["Old Hotel", "New Hotel"]
         assert saved[0]["data"]["price"] == "€80"
         assert saved[0]["day"] == 1
-        # All items get freshly generated IDs
-        assert saved[0]["id"] != "old11111"
-        assert saved[0]["id"] != saved[1]["id"]
+        # Existing items keep their ID; only new items get a generated one
+        assert saved[0]["id"] == "old11111"
+        assert len(saved[1]["id"]) == 8
+        assert saved[1]["id"] != "old11111"
         # User content kept, old agent elements (tagged or legacy group) stripped
         canvas_kwargs = db.update_canvas_state.call_args.kwargs
         assert [el["id"] for el in canvas_kwargs["scene_elements"]] == ["user-drawing", "card-0", "card-1"]
         assert canvas_kwargs["scene_files"] == {"user-file": {}, "file-new": {}}
 
-    async def test_invalid_json(self, patch_db):
+    async def test_invalid_json(self, patch_db, add):
         db = patch_db(make_db())
-        result = await board_add_items.coroutine(items="not json", trip_id=TRIP_ID)
+        result = await add(items="not json", trip_id=TRIP_ID)
         assert result.startswith("Error: Could not parse items JSON")
         db.update_board_items.assert_not_called()
 
-    async def test_empty_list(self, patch_db):
+    async def test_empty_list(self, patch_db, add):
         db = patch_db(make_db())
-        result = await board_add_items.coroutine(items="[]", trip_id=TRIP_ID)
+        result = await add(items="[]", trip_id=TRIP_ID)
         assert result == "Error: No items provided."
         db.update_board_items.assert_not_called()
 
@@ -156,42 +192,42 @@ CANVAS = {"scene_elements": [
 
 
 class TestBoardRemoveItems:
-    async def test_remove_by_full_id(self, patch_db):
+    async def test_remove_by_full_id(self, patch_db, remove):
         db = patch_db(make_db(board_items=list(BOARD), canvas=CANVAS))
-        result = await board_remove_items.coroutine(item_ids="abcd1234", trip_id=TRIP_ID)
+        result = await remove(item_ids="abcd1234", trip_id=TRIP_ID)
 
         assert result == "Removed 1 item(s) from the board: Hotel Roma"
         assert [bi["id"] for bi in saved_board_items(db)] == ["efgh5678"]
         elements = db.update_canvas_state.call_args.kwargs["scene_elements"]
         assert [el["id"] for el in elements] == ["card-e", "user-drawing"]
 
-    async def test_remove_by_prefix(self, patch_db):
+    async def test_remove_by_prefix(self, patch_db, remove):
         db = patch_db(make_db(board_items=list(BOARD), canvas=CANVAS))
-        result = await board_remove_items.coroutine(item_ids="abcd, efgh", trip_id=TRIP_ID)
+        result = await remove(item_ids="abcd, efgh", trip_id=TRIP_ID)
 
         assert result == "Removed 2 item(s) from the board: Hotel Roma, Colosseum Tour"
         assert saved_board_items(db) == []
 
-    async def test_unknown_ids(self, patch_db):
+    async def test_unknown_ids(self, patch_db, remove):
         db = patch_db(make_db(board_items=list(BOARD), canvas=CANVAS))
-        result = await board_remove_items.coroutine(item_ids="zzzz,yyyy", trip_id=TRIP_ID)
+        result = await remove(item_ids="zzzz,yyyy", trip_id=TRIP_ID)
 
         assert result == "No items found matching IDs: zzzz, yyyy"
         db.update_board_items.assert_not_called()
 
-    async def test_empty_board(self, patch_db):
+    async def test_empty_board(self, patch_db, remove):
         patch_db(make_db())
-        result = await board_remove_items.coroutine(item_ids="abcd", trip_id=TRIP_ID)
+        result = await remove(item_ids="abcd", trip_id=TRIP_ID)
         assert result == "Board is empty, nothing to remove."
 
-    async def test_no_ids(self, patch_db):
+    async def test_no_ids(self, patch_db, remove):
         patch_db(make_db(board_items=list(BOARD)))
-        result = await board_remove_items.coroutine(item_ids=" , ", trip_id=TRIP_ID)
+        result = await remove(item_ids=" , ", trip_id=TRIP_ID)
         assert result == "Error: No item IDs provided."
 
 
 class TestBoardClear:
-    async def test_empties_board_and_keeps_user_content(self, patch_db):
+    async def test_empties_board_and_keeps_user_content(self, patch_db, clear):
         canvas = {"scene_elements": [
             {"id": "tagged", "customData": {"agentPlaced": True}},
             {"id": "legacy", "groupIds": ["g-a"]},
@@ -199,15 +235,15 @@ class TestBoardClear:
         ]}
         db = patch_db(make_db(board_items=list(BOARD), canvas=canvas))
 
-        result = await board_clear.coroutine(trip_id=TRIP_ID)
+        result = await clear(trip_id=TRIP_ID)
 
         assert result == "Cleared 2 item(s) from the board. User-drawn content preserved."
         db.update_board_items.assert_awaited_once_with(TRIP_ID, [])
         elements = db.update_canvas_state.call_args.kwargs["scene_elements"]
         assert elements == [{"id": "user-drawing"}]
 
-    async def test_already_empty(self, patch_db):
+    async def test_already_empty(self, patch_db, clear):
         db = patch_db(make_db())
-        result = await board_clear.coroutine(trip_id=TRIP_ID)
+        result = await clear(trip_id=TRIP_ID)
         assert result == "Board is already empty."
         db.update_board_items.assert_not_called()

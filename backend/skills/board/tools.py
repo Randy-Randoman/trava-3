@@ -11,9 +11,8 @@ def _generate_id() -> str:
     return str(uuid.uuid4())[:8]
 
 
-@tool
-async def board_read(trip_id: Annotated[str, InjectedState("trip_id")]) -> str:
-    """Read what's currently on the trip board. Returns a summary of all items (hotels, activities) placed on the visual canvas."""
+async def read_board(trip_id: str) -> str:
+    """Summarise the items on a trip's board."""
     from app.services.database import DatabaseService
 
     db = DatabaseService()
@@ -43,19 +42,8 @@ async def board_read(trip_id: Annotated[str, InjectedState("trip_id")]) -> str:
     return "\n".join(lines)
 
 
-@tool
-async def board_add_items(
-    items: str,
-    trip_id: Annotated[str, InjectedState("trip_id")],
-) -> str:
-    """Add hotel or activity cards to the visual trip board.
-
-    Args:
-        items: JSON string — a list of item objects. Each object should have:
-            name (required), type ("stay"/"activity"), price, rating, review_count,
-            distance, url/bookingUrl, image_url/imageUrl.
-            Optional: day (int, e.g. 1), date (str, e.g. "2026-03-17") for day grouping.
-    """
+async def add_items(trip_id: str, items: str | list | dict) -> str:
+    """Add items (JSON string, list or single dict) to a trip's board and redraw its cards."""
     from app.services.database import DatabaseService
     from app.logic.transformer import generate_card_elements
 
@@ -113,6 +101,7 @@ async def board_add_items(
 
     # Build merged item data list from kept board items + new items
     merged_item_data = []
+    merged_ids = []
     for bi in kept_board_items:
         # Reconstruct the item dict from board_item data
         item_data = dict(bi.get("data", {}))
@@ -123,9 +112,11 @@ async def board_add_items(
         if bi.get("date"):
             item_data["date"] = bi["date"]
         merged_item_data.append(item_data)
+        merged_ids.append(bi.get("id") or _generate_id())
 
     for item in item_list:
         merged_item_data.append(item)
+        merged_ids.append(_generate_id())
 
     # Regenerate ALL card elements from merged items, positioned below user content
     new_elements, new_files, group_ids = await generate_card_elements(
@@ -145,11 +136,11 @@ async def board_add_items(
         scene_files=updated_files,
     )
 
-    # Create new BoardItem records for ALL merged items (with fresh group IDs from layout)
+    # Create BoardItem records for ALL merged items (existing IDs kept, fresh group IDs from layout)
     all_board_items = []
     for i, item_data in enumerate(merged_item_data):
         board_item = {
-            "id": _generate_id(),
+            "id": merged_ids[i],
             "type": item_data.get("type", "stay"),
             "name": item_data.get("name", "Unnamed"),
             "day": item_data.get("day"),
@@ -166,16 +157,8 @@ async def board_add_items(
     return f"Added {len(item_list)} item(s) to the board: {', '.join(names)}"
 
 
-@tool
-async def board_remove_items(
-    item_ids: str,
-    trip_id: Annotated[str, InjectedState("trip_id")],
-) -> str:
-    """Remove specific items from the trip board by their IDs (the short IDs shown by board_read, e.g. 'a1b2').
-
-    Args:
-        item_ids: Comma-separated item IDs to remove (e.g. "a1b2,c3d4")
-    """
+async def remove_items(trip_id: str, item_ids: str) -> str:
+    """Remove board items whose ID starts with one of the comma-separated IDs."""
     from app.services.database import DatabaseService
 
     # Parse item IDs
@@ -219,9 +202,8 @@ async def board_remove_items(
     return f"Removed {len(items_to_remove)} item(s) from the board: {', '.join(names)}"
 
 
-@tool
-async def board_clear(trip_id: Annotated[str, InjectedState("trip_id")]) -> str:
-    """Clear all agent-placed items from the trip board, preserving user-drawn content."""
+async def clear_board(trip_id: str) -> str:
+    """Remove all agent-placed items from a trip's board, keeping user-drawn content."""
     from app.services.database import DatabaseService
 
     db = DatabaseService()
@@ -256,3 +238,44 @@ async def board_clear(trip_id: Annotated[str, InjectedState("trip_id")]) -> str:
     await db.update_board_items(trip_id, [])
 
     return f"Cleared {count} item(s) from the board. User-drawn content preserved."
+
+
+@tool
+async def board_read(trip_id: Annotated[str, InjectedState("trip_id")]) -> str:
+    """Read what's currently on the trip board. Returns a summary of all items (hotels, activities) placed on the visual canvas."""
+    return await read_board(trip_id)
+
+
+@tool
+async def board_add_items(
+    items: str,
+    trip_id: Annotated[str, InjectedState("trip_id")],
+) -> str:
+    """Add hotel or activity cards to the visual trip board.
+
+    Args:
+        items: JSON string — a list of item objects. Each object should have:
+            name (required), type ("stay"/"activity"), price, rating, review_count,
+            distance, url/bookingUrl, image_url/imageUrl.
+            Optional: day (int, e.g. 1), date (str, e.g. "2026-03-17") for day grouping.
+    """
+    return await add_items(trip_id, items)
+
+
+@tool
+async def board_remove_items(
+    item_ids: str,
+    trip_id: Annotated[str, InjectedState("trip_id")],
+) -> str:
+    """Remove specific items from the trip board by their IDs (the short IDs shown by board_read, e.g. 'a1b2').
+
+    Args:
+        item_ids: Comma-separated item IDs to remove (e.g. "a1b2,c3d4")
+    """
+    return await remove_items(trip_id, item_ids)
+
+
+@tool
+async def board_clear(trip_id: Annotated[str, InjectedState("trip_id")]) -> str:
+    """Clear all agent-placed items from the trip board, preserving user-drawn content."""
+    return await clear_board(trip_id)
