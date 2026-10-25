@@ -27,6 +27,8 @@ class CanvasState(BaseModel):
     elements: List[Dict[str, Any]] = []
     files: Dict[str, Any] = {}
     appState: Optional[Dict[str, Any]] = None
+    # last_modified of the canvas this tab last loaded/saved; a mismatch means a stale tab
+    base_version: Optional[str] = None
 
 
 class CanvasResponse(BaseModel):
@@ -36,6 +38,13 @@ class CanvasResponse(BaseModel):
     files: Dict[str, Any]
     appState: Optional[Dict[str, Any]] = None
     last_modified: Optional[str] = None
+
+
+def _canvas_version(canvas: Optional[Dict[str, Any]]) -> Optional[str]:
+    """The stored canvas version: its last_modified (bumped by a DB trigger on every write)."""
+    if canvas and canvas.get("last_modified"):
+        return str(canvas["last_modified"])
+    return None
 
 
 # ================================================
@@ -64,7 +73,8 @@ async def get_canvas(trip_id: str, user_id: str = Depends(require_auth)):
                 trip_id=trip_id,
                 elements=template["elements"],
                 files=template["files"],
-                appState=None
+                appState=None,
+                last_modified=_canvas_version(canvas)
             )
 
         return CanvasResponse(
@@ -72,7 +82,7 @@ async def get_canvas(trip_id: str, user_id: str = Depends(require_auth)):
             elements=canvas.get("scene_elements", []),
             files=canvas.get("scene_files", {}),
             appState=canvas.get("scene_app_state"),
-            last_modified=str(canvas.get("last_modified")) if canvas.get("last_modified") else None
+            last_modified=_canvas_version(canvas)
         )
 
     except HTTPException:
@@ -89,11 +99,25 @@ async def update_canvas(trip_id: str, canvas: CanvasState, user_id: str = Depend
 
     Updates the canvas state for a trip.
     Full replace for MVP - sends complete elements + files.
+    Returns 409 with the current canvas if base_version is stale.
     """
     logger.info(f"PUT /trips/{trip_id}/canvas - {len(canvas.elements)} elements")
 
     try:
         await verify_trip_owner(trip_id, user_id)
+
+        # Optimistic concurrency: a stale tab must not overwrite or reconcile away newer changes
+        current = await db.get_canvas_state(trip_id) or {}
+        current_version = _canvas_version(current)
+        if canvas.base_version != current_version:
+            logger.info(f"Canvas save conflict for trip {trip_id}")
+            raise HTTPException(status_code=409, detail=CanvasResponse(
+                trip_id=trip_id,
+                elements=current.get("scene_elements") or [],
+                files=current.get("scene_files") or {},
+                appState=current.get("scene_app_state"),
+                last_modified=current_version
+            ).model_dump())
 
         # Update canvas state
         result = await db.update_canvas_state(

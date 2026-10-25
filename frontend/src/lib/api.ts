@@ -43,21 +43,29 @@ export async function getCanvasState(tripId: string): Promise<CanvasState> {
   return response.json()
 }
 
+/** Thrown when the canvas changed elsewhere since this tab last loaded/saved it (HTTP 409) */
+export class CanvasConflictError extends Error {}
+
 /**
- * Save canvas state for a trip
+ * Save canvas state for a trip.
+ * baseVersion is the last_modified this tab last loaded/saved.
  */
 export async function saveCanvasState(
   tripId: string,
   elements: unknown[],
   files: Record<string, unknown>,
+  baseVersion: string | null,
   appState?: Record<string, unknown>
 ): Promise<CanvasState> {
   const headers = await getAuthHeaders()
   const response = await fetch(`${env.backendUrl()}/trips/${tripId}/canvas`, {
     method: 'PUT',
     headers,
-    body: JSON.stringify({ elements, files, appState }),
+    body: JSON.stringify({ elements, files, appState, base_version: baseVersion }),
   })
+  if (response.status === 409) {
+    throw new CanvasConflictError('Canvas changed elsewhere')
+  }
   if (!response.ok) {
     throw new Error(`Failed to save canvas: ${response.statusText}`)
   }
