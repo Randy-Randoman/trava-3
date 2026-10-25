@@ -116,9 +116,11 @@ The backend image includes Chromium, so Booking.com search works inside the cont
 
 ## OAuth for agents
 
+The MCP server at `/mcp` is part of the backend service, so there's nothing extra to deploy. How to connect a client: [README](../README.md#using-with-claude-code--mcp).
+
 External agents (Claude Code, Claude Cowork, claude.ai) connect to TRAVA with OAuth 2.1. Supabase Auth is the authorization server: it registers the clients, runs the sign-in and issues the tokens. TRAVA hosts the consent page (`/oauth/consent`) and is the resource server. Users see and disconnect their agents under **Connected apps** on the dashboard.
 
-The backend serves the protected resource metadata (RFC 9728) at `/.well-known/oauth-protected-resource` (and `…/mcp`). It names the resource `<PUBLIC_BASE_URL>/mcp`, which clients check against the URL they were given, so `PUBLIC_BASE_URL` must be the backend's public URL exactly.
+The backend serves the protected resource metadata (RFC 9728) at `/.well-known/oauth-protected-resource` (and `…/mcp`). It names the resource `<PUBLIC_BASE_URL>/mcp`, which clients check against the URL they were given, so `PUBLIC_BASE_URL` must be the backend's public URL exactly. `/mcp` also only accepts requests whose `Host` header is `PUBLIC_BASE_URL`'s host (or `localhost`/`127.0.0.1`); any other host gets HTTP 421. If you use a custom domain, set `PUBLIC_BASE_URL` to it.
 
 ### Supabase project settings (made by hand)
 
@@ -129,10 +131,15 @@ Nothing in the repo applies these.
 3. On the same page, turn on **Allow dynamic client registration**. Agents register themselves; a client gets nothing until a user signs in and presses Allow.
 4. **Project Settings → JWT Keys: the current signing key must be asymmetric** (ES256 or RS256). The backend verifies agent tokens against the project's JWKS and can't verify HS256 tokens.
 
+### Migrations
+
+Agents need migrations `20260101000009_agent_grants.sql` (the grant check below) and `20260101000010_canvas_realtime.sql` (open boards reload when an agent changes them, via Supabase Realtime). `supabase db push` applies both.
+
 Access tokens live as long as the project's JWT expiry, but disconnecting an app takes effect at once: on every agent request the backend checks the token's issuer, audience and `client_id`, then calls `public.agent_grant_active` (migration `20260101000009_agent_grants.sql`) to check that the consent isn't revoked, the client isn't deleted and the session still exists.
 
 ## Troubleshooting
 
 - **CORS errors in the browser:** `ALLOWED_ORIGINS` on the backend must exactly match the frontend origin: scheme, host and port, with no trailing slash. The backend logs the allowed origins at startup.
 - **Frontend calls the wrong backend URL:** `NEXT_PUBLIC_BACKEND_URL` was baked in at build time. Fix the variable and rebuild the frontend.
+- **`/mcp` returns 421 Misdirected Request:** the request's `Host` doesn't match `PUBLIC_BASE_URL`. Set it to the exact public domain the client uses.
 - **Booking search fails:** check the backend logs for `Failed to launch Playwright browser`.

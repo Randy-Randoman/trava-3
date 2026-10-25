@@ -149,10 +149,11 @@ flowchart LR
     api --> db
     api -. "verify JWT (JWKS)" .-> auth
 
-    ext -. "OAuth 2.1 via Supabase Auth (planned)" .-> auth
-    ext -. "Bearer token (planned)" .-> mcp
-    mcp -. "planned" .-> SK
-    db -. "Realtime (planned)" .-> ui
+    ext -- "OAuth 2.1 via Supabase Auth" --> auth
+    ext -- "Bearer token" --> mcp
+    mcp --> SK
+    mcp -. "verify token (JWKS + grant check)" .-> auth
+    db -- "Realtime" --> ui
 ```
 
 ## Adding a skill
@@ -185,15 +186,48 @@ Skills are the extensibility hook. Every capability the agent has — searching 
 
 That's the contract. For a real example, look at `backend/skills/booking/` or `backend/skills/web_search/`.
 
-## Using with Claude Code / Claude Cowork (planned)
+## Using with Claude Code / MCP
 
-The skills are designed to be reusable outside the bundled LangGraph agent. Anthropic's **Claude Code** (CLI) and **Claude Cowork** (desktop agent) both consume tools via [MCP](https://modelcontextprotocol.io/), so a thin MCP server wrapping the existing skills would let either driver the trip board directly.
+The backend serves a remote MCP server at `/mcp`, so Claude Code, claude.ai, Claude Cowork or any other MCP client can plan trips on your boards. Sign-in is OAuth 2.1 with Supabase Auth: there are no tokens to copy.
 
-The wrapper doesn't exist yet — it's planned as Phase 11 in [`docs/plan.md`](docs/plan.md). Specifically it would:
+1. **One-time Supabase setup:** enable the OAuth 2.1 server, set the authorization path to `/oauth/consent`, allow dynamic client registration, and use an asymmetric JWT signing key. Set `PUBLIC_BASE_URL` on the backend to its public URL. Details: [OAuth for agents](docs/deploy.md#oauth-for-agents).
+2. **Connect Claude Code:**
 
-- Wrap the `TOOLS` from each skill as MCP tools
-- Replace the agent's `InjectedState("trip_id")` with an explicit `trip_id` argument
-- Reuse `backend/app/core/auth.py` for JWT-based ownership checks
+   ```bash
+   claude mcp add --transport http trava <PUBLIC_BASE_URL>/mcp
+   ```
+
+   On first use the browser opens: log in to TRAVA, then press **Allow**.
+3. **Ask:** *"Create a trip 'Lisbon' and add 3 hotels under €150 for 12-15 May."*
+4. **Open the board** in the app. It updates live while the agent works.
+
+**claude.ai / Claude Cowork / ChatGPT:** add a custom connector with `<PUBLIC_BASE_URL>/mcp`. This needs a public HTTPS URL (e.g. a Railway deploy); `localhost` only works for Claude Code on the same machine.
+
+### Tools
+
+| Tool | What it does |
+|------|--------------|
+| `list_trips` | List your trips |
+| `create_trip` | Create a trip with an empty board |
+| `board_read` | Show a board's items and their IDs |
+| `board_add_items` | Place hotel/activity cards on a board |
+| `board_remove_items` | Remove items by ID (at least 4 characters, as shown by `board_read`) |
+| `board_clear` | Remove all agent-placed items, keeping your own drawings |
+| `booking_search` | Search Booking.com for hotels with real prices |
+| `web_search` | Search the web (Tavily) |
+| `image_search` | Search for images (Tavily) |
+
+Every board tool checks that the trip is yours.
+
+### Security
+
+A connected app acts as you on your trips. Disconnect it under **Connected apps** (dashboard → `/settings/connections`); this takes effect immediately, because the backend checks the grant on every request. Agent tokens only work on `/mcp`; the rest of the app API rejects them.
+
+### Known limitations
+
+- No rate limiting on agent calls: Booking.com scraping and Tavily usage are on you.
+- An upstream Supabase bug ([supabase/auth#2820](https://github.com/supabase/auth/issues/2820)) may break the consent step for some public MCP clients.
+- If you sign up in the middle of connecting, you end up on the dashboard. Reconnect from the client afterwards.
 
 ## Environment variables
 
@@ -208,6 +242,7 @@ The wrapper doesn't exist yet — it's planned as Phase 11 in [`docs/plan.md`](d
 | `ANTHROPIC_API_KEY` | If Claude | [console.anthropic.com](https://console.anthropic.com) |
 | `TAVILY_API_KEY` | Yes | [tavily.com](https://tavily.com) — web + image search |
 | `NEXT_PUBLIC_BACKEND_URL` | Yes | Usually `http://localhost:8000` in dev |
+| `PUBLIC_BASE_URL` | For MCP | Backend's public URL as given to MCP clients; defaults to `http://localhost:8000` |
 
 See `.env.example` for the full template. For deployments, the backend also reads `ALLOWED_ORIGINS` (CORS) — see [`docs/deploy.md`](docs/deploy.md).
 
@@ -241,7 +276,7 @@ trava/
 │
 ├── supabase/
 │   ├── config.toml             # Local stack config (Supabase CLI)
-│   └── migrations/             # SQL migrations (001–008, timestamped)
+│   └── migrations/             # SQL migrations (001–010, timestamped)
 │
 ├── docs/                       # Setup, deployment and plan docs
 ├── .env.example                # Environment template

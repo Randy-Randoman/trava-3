@@ -352,7 +352,7 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 
 ---
 
-## Phase 11: MCP Server (Bring Your Own Agent)
+## Phase 11: MCP Server (Bring Your Own Agent) ✅
 
 **Goal:** External agents (Claude Code, Claude Cowork, any MCP client) can plan trips on the TRAVA board.
 
@@ -380,7 +380,9 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 ### Manual steps (user must do — agent cannot)
 - Supabase → Authentication → OAuth Server: enable it, authorization path `/oauth/consent`, allow dynamic client registration
 - Supabase JWT signing key must be asymmetric (ES256/RS256)
-- Set `PUBLIC_BASE_URL` on the backend service (Railway)
+- Set `PUBLIC_BASE_URL` on the backend service (Railway) to the exact public domain (custom domain if used): `/mcp` returns 421 for any other `Host`
+- Backend needs `SUPABASE_URL` set, or it won't start
+- Apply migrations 009 (agent grants function) and 010 (Realtime on `canvas_states`)
 
 ---
 
