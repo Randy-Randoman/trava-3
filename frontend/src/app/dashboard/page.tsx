@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Dashboard Page (Wave 4 - Issue #15)
+ * Dashboard Page
  *
  * User's home view showing all their trips as cards.
  * Features: View, Rename, Delete trips
@@ -9,18 +9,17 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { getTrips, deleteTrip, updateTrip, createTrip, TripListItem } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { ProtectedRoute } from '@/components/auth'
-import FeedbackModal from '@/components/FeedbackModal'
 
 function DashboardContent() {
   const router = useRouter()
-  const { user, signOut } = useAuth()
+  const { signOut } = useAuth()
   const [trips, setTrips] = useState<TripListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [newTripOpen, setNewTripOpen] = useState(false)
   const [creatingTrip, setCreatingTrip] = useState(false)
   const [renameTarget, setRenameTarget] = useState<{ id: string; title: string } | null>(null)
@@ -144,15 +143,12 @@ function DashboardContent() {
                 </svg>
                 New Trip
               </button>
-              <button
-                onClick={() => setFeedbackOpen(true)}
-                className="px-4 py-2 bg-white border-2 border-trava-black text-trava-black font-bold transition-all hover:bg-trava-teal hover:shadow-brutal hover:translate-x-[-2px] hover:translate-y-[-2px] flex items-center gap-2 rounded-none"
+              <Link
+                href="/settings/connections"
+                className="px-4 py-2 bg-white border-2 border-trava-black text-trava-black font-bold transition-all hover:bg-adventure-orange hover:shadow-brutal hover:translate-x-[-2px] hover:translate-y-[-2px]"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                  <path fillRule="evenodd" d="M10 2c-2.236 0-4.43.18-6.57.524C1.993 2.755 1 4.014 1 5.426v5.148c0 1.413.993 2.67 2.43 2.902 1.168.188 2.352.327 3.55.414.28.02.521.18.642.413l1.713 3.293a.75.75 0 0 0 1.33 0l1.713-3.293a.783.783 0 0 1 .642-.413 41.102 41.102 0 0 0 3.55-.414c1.437-.231 2.43-1.49 2.43-2.902V5.426c0-1.413-.993-2.67-2.43-2.902A41.289 41.289 0 0 0 10 2ZM6.75 6a.75.75 0 0 0 0 1.5h6.5a.75.75 0 0 0 0-1.5h-6.5Zm0 2.5a.75.75 0 0 0 0 1.5h3.5a.75.75 0 0 0 0-1.5h-3.5Z" clipRule="evenodd" />
-                </svg>
-                Write Feedback
-              </button>
+                Connected apps
+              </Link>
               <button
                 onClick={() => signOut()}
                 className="px-4 py-2 bg-white border-2 border-trava-black text-trava-black font-bold transition-all hover:bg-adventure-orange hover:shadow-brutal hover:translate-x-[-2px] hover:translate-y-[-2px]"
@@ -219,14 +215,6 @@ function DashboardContent() {
           currentTitle={renameTarget.title}
           onClose={() => setRenameTarget(null)}
           onRename={handleRename}
-        />
-      )}
-
-      {/* Feedback Modal */}
-      {feedbackOpen && (
-        <FeedbackModal
-          userEmail={user?.email || 'anonymous'}
-          onClose={() => setFeedbackOpen(false)}
         />
       )}
     </div>

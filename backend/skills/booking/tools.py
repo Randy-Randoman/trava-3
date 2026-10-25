@@ -1,9 +1,52 @@
 """LangChain @tool wrapper for Booking.com search."""
 
 import json
+import logging
 from langchain_core.tools import tool
 from .search import search_booking
 from .models import SearchParams
+
+logger = logging.getLogger(__name__)
+
+
+async def search_hotels(params: SearchParams) -> str:
+    """Search Booking.com and return hotels as a JSON array of board-ready items (or a message)."""
+    try:
+        hotels = await search_booking(params)
+    except Exception:
+        logger.exception("Booking search failed")
+        return "Search failed. Playwright/Chromium may not be installed."
+
+    if not hotels:
+        return f"No hotels found in {params.destination} for {params.checkin} to {params.checkout}."
+
+    # Return structured JSON — agent can pass this directly to board_add_items
+    results = []
+    for h in hotels:
+        # Build a description from available data
+        desc_parts = []
+        if h.rating:
+            desc_parts.append(f"Rating {h.rating}/10")
+        if h.review_count:
+            desc_parts.append(f"{h.review_count} reviews")
+        if h.distance:
+            desc_parts.append(h.distance)
+        desc_parts.append(f"Check-in: {params.checkin} · Check-out: {params.checkout}")
+
+        item = {
+            "name": h.name,
+            "type": "stay",
+            "price": h.price or "",
+            "rating": h.rating or "",
+            "review_count": h.review_count or "",
+            "distance": h.distance or "",
+            "description": " · ".join(desc_parts) if desc_parts else "",
+            "bookingUrl": h.url or "",
+            "image_url": h.image_url or "",
+        }
+        results.append(item)
+
+    return json.dumps(results)
 
 
 @tool
@@ -31,7 +74,7 @@ async def booking_search(
         star_rating: Hotel star rating (1-5)
         sort_by: Sort results — one of: price, rating, distance, best_value
     """
-    params = SearchParams(
+    return await search_hotels(SearchParams(
         destination=destination,
         checkin=checkin,
         checkout=checkout,
@@ -41,40 +84,4 @@ async def booking_search(
         min_review_score=min_review_score,
         star_rating=star_rating,
         sort_by=sort_by,
-    )
-
-    try:
-        hotels = await search_booking(params)
-    except Exception as e:
-        return f"Search failed: {e}. Playwright/Chromium may not be installed."
-
-    if not hotels:
-        return f"No hotels found in {destination} for {checkin} to {checkout}."
-
-    # Return structured JSON — agent can pass this directly to board_add_items
-    results = []
-    for h in hotels:
-        # Build a description from available data
-        desc_parts = []
-        if h.rating:
-            desc_parts.append(f"Rating {h.rating}/10")
-        if h.review_count:
-            desc_parts.append(f"{h.review_count} reviews")
-        if h.distance:
-            desc_parts.append(h.distance)
-        desc_parts.append(f"Check-in: {checkin} · Check-out: {checkout}")
-
-        item = {
-            "name": h.name,
-            "type": "stay",
-            "price": h.price or "",
-            "rating": h.rating or "",
-            "review_count": h.review_count or "",
-            "distance": h.distance or "",
-            "description": " · ".join(desc_parts) if desc_parts else "",
-            "bookingUrl": h.url or "",
-            "image_url": h.image_url or "",
-        }
-        results.append(item)
-
-    return json.dumps(results)
+    ))

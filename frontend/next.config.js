@@ -4,13 +4,17 @@ const nextConfig = {
   output: 'standalone',
   // Hide the Next.js dev indicator
   devIndicators: false,
-  // Enable experimental features if needed
-  experimental: {
-    // serverActions: true,
-  },
-  // Environment variables that should be available on the client
-  env: {
-    NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000',
+  // No framing anywhere: stops clickjacking, e.g. of the OAuth consent page's Allow button
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          { key: 'X-Frame-Options', value: 'DENY' },
+        ],
+      },
+    ]
   },
 }
 

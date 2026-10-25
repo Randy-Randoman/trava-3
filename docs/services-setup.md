@@ -43,6 +43,8 @@ playwright install chromium
 
 Do this once, after `pip install -r requirements.txt`. The browser binary is ~200 MB.
 
+To run the backend tests too, install the dev requirements (pytest isn't in `requirements.txt`): `pip install -r requirements-dev.txt`.
+
 ## Troubleshooting
 
 - **"Search failed: Playwright/Chromium may not be installed."** — run `playwright install chromium` in the backend venv.

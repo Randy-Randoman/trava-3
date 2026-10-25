@@ -2,9 +2,12 @@
 Supabase Database Service - Client wrapper for database operations
 """
 
+import logging
 from typing import Dict, List, Any, Optional
 from supabase import create_client, Client
 from ..core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseService:
@@ -12,7 +15,6 @@ class DatabaseService:
     Wrapper for Supabase database operations
 
     Provides clean interfaces for:
-    - Profiles management
     - Trips CRUD operations
     - Canvas state persistence
     """
@@ -27,11 +29,11 @@ class DatabaseService:
 
         Uses SUPABASE_SERVICE_KEY to bypass RLS policies.
         This is safe in the backend because the service key is never exposed to the frontend.
-        Required for MVP since we don't have authentication yet (auth.uid() is NULL).
+        Ownership is enforced in the API layer (see core.auth.verify_trip_owner).
         """
         if self._client is None:
             # Use service key for backend operations to bypass RLS
-            service_key = settings.SUPABASE_SERVICE_KEY or settings.SUPABASE_ANON_KEY
+            service_key = settings.SUPABASE_SERVICE_KEY
             if not settings.SUPABASE_URL or not service_key:
                 raise ValueError("Supabase URL and Service Key must be configured")
             self._client = create_client(
@@ -41,28 +43,12 @@ class DatabaseService:
         return self._client
 
     # ================================================
-    # Profile Operations
-    # ================================================
-
-    async def get_profile(self, user_id: str) -> Optional[Dict[str, Any]]:
-        """Get user profile by ID"""
-        print(f"[DB] get_profile({user_id})")
-        response = self.client.table("profiles").select("*").eq("id", user_id).limit(1).execute()
-        return response.data[0] if response.data else None
-
-    async def update_profile(self, user_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Update user profile"""
-        print(f"[DB] update_profile({user_id})")
-        response = self.client.table("profiles").update(data).eq("id", user_id).execute()
-        return response.data[0] if response.data else {}
-
-    # ================================================
     # Trip Operations
     # ================================================
 
     async def create_trip(self, user_id: str, title: str = "Untitled Trip", **kwargs) -> Dict[str, Any]:
         """Create a new trip for a user"""
-        print(f"[DB] create_trip(user_id={user_id}, title={title})")
+        logger.debug(f"create_trip(user_id={user_id}, title={title})")
         trip_data = {
             "user_id": user_id,
             "title": title,
@@ -73,19 +59,19 @@ class DatabaseService:
 
     async def get_trip(self, trip_id: str) -> Optional[Dict[str, Any]]:
         """Get trip by ID"""
-        print(f"[DB] get_trip({trip_id})")
+        logger.debug(f"get_trip({trip_id})")
         response = self.client.table("trips").select("*").eq("id", trip_id).limit(1).execute()
         return response.data[0] if response.data else None
 
     async def get_user_trips(self, user_id: str) -> List[Dict[str, Any]]:
         """Get all trips for a user"""
-        print(f"[DB] get_user_trips({user_id})")
+        logger.debug(f"get_user_trips({user_id})")
         response = self.client.table("trips").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
         return response.data if response.data else []
 
     async def get_user_trips_with_thumbnails(self, user_id: str) -> List[Dict[str, Any]]:
         """Get all trips for a user with thumbnail images from canvas state or board items"""
-        print(f"[DB] get_user_trips_with_thumbnails({user_id})")
+        logger.debug(f"get_user_trips_with_thumbnails({user_id})")
 
         # Get trips with their canvas states in one query
         response = self.client.table("trips").select(
@@ -134,25 +120,25 @@ class DatabaseService:
 
     async def update_trip(self, trip_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Update trip data"""
-        print(f"[DB] update_trip({trip_id})")
+        logger.debug(f"update_trip({trip_id})")
         response = self.client.table("trips").update(data).eq("id", trip_id).execute()
         return response.data[0] if response.data else {}
 
     async def delete_trip(self, trip_id: str) -> bool:
         """Delete a trip (cascades to canvas_states)"""
-        print(f"[DB] delete_trip({trip_id})")
+        logger.debug(f"delete_trip({trip_id})")
         response = self.client.table("trips").delete().eq("id", trip_id).execute()
         return len(response.data) > 0 if response.data else False
 
     async def get_trip_by_share_token(self, share_token: str) -> Optional[Dict[str, Any]]:
         """Get trip by share token (for public viewing)"""
-        print(f"[DB] get_trip_by_share_token({share_token})")
+        logger.debug("get_trip_by_share_token(<token>)")
         response = self.client.table("trips").select("*").eq("share_token", share_token).limit(1).execute()
         return response.data[0] if response.data else None
 
     async def set_share_token(self, trip_id: str, token: str) -> Dict[str, Any]:
         """Set the share token for a trip"""
-        print(f"[DB] set_share_token({trip_id})")
+        logger.debug(f"set_share_token({trip_id})")
         response = self.client.table("trips").update({"share_token": token}).eq("id", trip_id).execute()
         return response.data[0] if response.data else {}
 
@@ -162,7 +148,7 @@ class DatabaseService:
 
     async def get_canvas_state(self, trip_id: str) -> Optional[Dict[str, Any]]:
         """Get canvas state for a trip"""
-        print(f"[DB] get_canvas_state({trip_id})")
+        logger.debug(f"get_canvas_state({trip_id})")
         response = self.client.table("canvas_states").select("*").eq("trip_id", trip_id).limit(1).execute()
         return response.data[0] if response.data else None
 
@@ -171,8 +157,9 @@ class DatabaseService:
         trip_id: str,
         scene_elements: List[Dict[str, Any]] = None,
         scene_files: Dict[str, Any] = None,
-        scene_app_state: Dict[str, Any] = None
-    ) -> Dict[str, Any]:
+        scene_app_state: Dict[str, Any] = None,
+        expected_version: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
         """
         Update canvas state for a trip (upsert to guarantee persistence)
 
@@ -181,8 +168,10 @@ class DatabaseService:
             scene_elements: Excalidraw elements array
             scene_files: Excalidraw files dictionary (for images)
             scene_app_state: Excalidraw app state
+            expected_version: if set, only update when last_modified still equals it
+                (returns None on a conflict)
         """
-        print(f"[DB] update_canvas_state({trip_id})")
+        logger.debug(f"update_canvas_state({trip_id})")
         update_data = {}
 
         if scene_elements is not None:
@@ -194,6 +183,13 @@ class DatabaseService:
 
         if not update_data:
             return {}
+
+        if expected_version is not None:
+            # Only write if nobody changed the canvas since expected_version; None = conflict
+            response = self.client.table("canvas_states").update(update_data).eq(
+                "trip_id", trip_id
+            ).eq("last_modified", expected_version).execute()
+            return response.data[0] if response.data else None
 
         # Use upsert to ensure the row is created if it doesn't exist yet.
         # The trigger on trips should create canvas_states rows, but if it
@@ -211,7 +207,7 @@ class DatabaseService:
 
     async def get_board_items(self, trip_id: str) -> List[Dict[str, Any]]:
         """Get board_items for a trip (list of agent-placed items)"""
-        print(f"[DB] get_board_items({trip_id})")
+        logger.debug(f"get_board_items({trip_id})")
         response = self.client.table("trips").select("board_items").eq("id", trip_id).limit(1).execute()
         if response.data and response.data[0].get("board_items"):
             return response.data[0]["board_items"]
@@ -219,7 +215,7 @@ class DatabaseService:
 
     async def update_board_items(self, trip_id: str, items: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Update board_items for a trip"""
-        print(f"[DB] update_board_items({trip_id})")
+        logger.debug(f"update_board_items({trip_id})")
         response = self.client.table("trips").update({"board_items": items}).eq("id", trip_id).execute()
         return response.data[0] if response.data else {}
 
@@ -238,7 +234,7 @@ class DatabaseService:
         Returns:
             Conversation record
         """
-        print(f"[DB] get_or_create_conversation({trip_id})")
+        logger.debug(f"get_or_create_conversation({trip_id})")
 
         # Try to get existing conversation
         response = self.client.table("conversations").select("*").eq("trip_id", trip_id).limit(1).execute()
@@ -252,21 +248,6 @@ class DatabaseService:
             conversation_data["title"] = title
 
         response = self.client.table("conversations").insert(conversation_data).execute()
-        return response.data[0] if response.data else {}
-
-    async def update_conversation(self, conversation_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Update conversation metadata (title, cache_name, etc.)
-
-        Args:
-            conversation_id: The conversation ID
-            data: Dictionary of fields to update
-
-        Returns:
-            Updated conversation record
-        """
-        print(f"[DB] update_conversation({conversation_id})")
-        response = self.client.table("conversations").update(data).eq("id", conversation_id).execute()
         return response.data[0] if response.data else {}
 
     # ================================================
@@ -285,7 +266,7 @@ class DatabaseService:
         Returns:
             Created message record
         """
-        print(f"[DB] save_message(conversation_id={conversation_id}, role={role})")
+        logger.debug(f"save_message(conversation_id={conversation_id}, role={role})")
 
         message_data = {
             "conversation_id": conversation_id,
@@ -307,7 +288,7 @@ class DatabaseService:
         Returns:
             List of message records ordered by created_at ASC (oldest first)
         """
-        print(f"[DB] load_messages(conversation_id={conversation_id}, limit={limit})")
+        logger.debug(f"load_messages(conversation_id={conversation_id}, limit={limit})")
 
         response = self.client.table("messages") \
             .select("role, content, created_at") \
@@ -319,21 +300,6 @@ class DatabaseService:
         # Reverse to get oldest-first order
         messages = list(reversed(response.data)) if response.data else []
         return messages
-
-    # ================================================
-    # Feedback Operations
-    # ================================================
-
-    async def save_feedback(self, user_id: str, username: str, feedback: str) -> Dict[str, Any]:
-        """Save user feedback to the database"""
-        print(f"[DB] save_feedback(user_id={user_id}, username={username})")
-        feedback_data = {
-            "user_id": user_id,
-            "username": username,
-            "feedback": feedback[:1000],  # Enforce 1000 char limit
-        }
-        response = self.client.table("user_feedback").insert(feedback_data).execute()
-        return response.data[0] if response.data else {}
 
 
 # Singleton instance

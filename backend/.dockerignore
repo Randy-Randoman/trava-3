@@ -19,11 +19,13 @@ coverage.xml
 .git
 .mypy_cache
 .pytest_cache
+.ruff_cache
 .hypothesis
 *.egg-info
 dist
 build
-.env
-.env.*
+.env*
 tests/
+pytest.ini
+requirements-dev.txt
 *.md

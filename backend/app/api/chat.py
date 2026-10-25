@@ -3,7 +3,8 @@ Chat API - SSE streaming endpoint using LangGraph agent
 """
 
 import json
-from fastapi import APIRouter, Depends
+import logging
+from fastapi import APIRouter, Depends, HTTPException
 from starlette.responses import StreamingResponse, JSONResponse
 from langchain_core.messages import HumanMessage, AIMessage
 
@@ -11,6 +12,8 @@ from app.models.chat import ChatRequest
 from app.services.database import DatabaseService
 from app.agent.graph import create_agent_graph
 from app.core.auth import require_auth, verify_trip_owner
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -121,9 +124,9 @@ async def chat_stream(body: ChatRequest, user_id: str = Depends(require_auth)):
             # 6. Done
             yield _sse_event({"type": "done"})
 
-        except Exception as e:
-            print(f"[Chat] Error in stream: {e}")
-            yield _sse_event({"type": "error", "content": str(e)})
+        except Exception:
+            logger.exception("Error in chat stream")
+            yield _sse_event({"type": "error", "content": "Something went wrong. Please try again."})
 
     return StreamingResponse(
         event_generator(),
@@ -153,9 +156,11 @@ async def get_messages(trip_id: str, user_id: str = Depends(require_auth)):
 
         return {"messages": db_messages}
 
-    except Exception as e:
-        print(f"[Chat] Error loading messages: {e}")
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Error loading messages")
         return JSONResponse(
             status_code=500,
-            content={"detail": f"Failed to load messages: {str(e)}"},
+            content={"detail": "Failed to load messages"},
         )

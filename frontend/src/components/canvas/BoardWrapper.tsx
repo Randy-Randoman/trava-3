@@ -1,18 +1,23 @@
 'use client'
 
 /**
- * BoardWrapper - Excalidraw Canvas Component (Issue #10)
+ * BoardWrapper - Excalidraw Canvas Component
  *
  * Features:
  * - Load canvas state from backend GET /trips/{id}/canvas
  * - Auto-save with 2s debounce on change
- * - Hydrates images from URLs via proxy (Issue #13)
+ * - Stale saves (canvas changed elsewhere) get a 409: reload and show a notice
+ * - Live updates via Supabase Realtime: reload when the board changes elsewhere
+ * - Hydrates images from URLs via proxy
  */
 
 import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getCanvasState, saveCanvasState, uploadCanvasImage } from '@/lib/api'
+import { CanvasConflictError, getCanvasState, saveCanvasState, uploadCanvasImage } from '@/lib/api'
 import { useExcalidrawHydration } from '@/lib/hooks'
+import { shouldReload } from '@/lib/canvasSync'
+import { supabase } from '@/lib/supabase/client'
+import '@excalidraw/excalidraw/index.css'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ExcalidrawAPI = any;
@@ -28,11 +33,15 @@ interface BoardWrapperProps {
 }
 
 const SAVE_DEBOUNCE_MS = 2000
+const CONFLICT_NOTICE_MS = 4000
 
 export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [initialData, setInitialData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [conflictNotice, setConflictNotice] = useState(false)
+  // Canvas version (last_modified) this tab last loaded/saved, sent as base_version on save
+  const versionRef = useRef<string | null>(null)
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   // Store the original files from backend (with URLs) for hydration
   const originalFilesRef = useRef<Record<string, unknown>>({})
@@ -52,6 +61,11 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
   }, [setExcalidrawApi, hydrateImages, setOriginalFiles])
 
   const loadCanvas = useCallback(async (shouldClearCache = false) => {
+    // A pending autosave holds the pre-reload scene; sent with the new version it would overwrite the reload
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+      saveTimeoutRef.current = null
+    }
     setLoading(true)
 
     if (shouldClearCache) {
@@ -61,6 +75,7 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
     if (!tripId) {
       setInitialData({ elements: [], files: {} })
       originalFilesRef.current = {}
+      versionRef.current = null
       setLoading(false)
       return
     }
@@ -69,7 +84,7 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
       const data = await getCanvasState(tripId)
       // Store the original files with URLs for hydration
       originalFilesRef.current = data.files || {}
-      console.log('[BoardWrapper] Loaded files from backend:', Object.keys(originalFilesRef.current).length)
+      versionRef.current = data.last_modified ?? null
 
       setInitialData({
         elements: data.elements || [],
@@ -96,6 +111,13 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
     loadCanvas(true)
   }, [loadCanvas])
 
+  // The board changed elsewhere (another tab, an agent): take the server's version
+  const handleConflict = useCallback(() => {
+    setConflictNotice(true)
+    setTimeout(() => setConflictNotice(false), CONFLICT_NOTICE_MS)
+    loadCanvas(true)
+  }, [loadCanvas])
+
   // Allow external triggers (e.g., chat transform) to force a reload without changing tripId
   useEffect(() => {
     const handleCanvasUpdated = (event: Event) => {
@@ -111,6 +133,29 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
       window.removeEventListener('canvas-updated', handleCanvasUpdated)
     }
   }, [tripId, loadCanvas])
+
+  // Live updates: reload when the canvas row changes elsewhere (an agent, another tab).
+  // Owner-only RLS limits events to the logged-in owner, so the read-only shared board doesn't subscribe.
+  useEffect(() => {
+    if (readOnly || !tripId) return
+    const channel = supabase
+      .channel(`canvas:${tripId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'canvas_states', filter: `trip_id=eq.${tripId}` },
+        (payload) => {
+          if (payload.eventType === 'DELETE') return
+          const row = payload.new as { last_modified?: string }
+          if (shouldReload(row.last_modified, versionRef.current)) {
+            window.dispatchEvent(new CustomEvent('canvas-updated', { detail: { tripId } }))
+          }
+        }
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [tripId, readOnly])
 
   /**
    * Upload any new user-added images (base64 data URLs) to Supabase Storage,
@@ -181,10 +226,11 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
         const files = api.getFiles()
         const filesToSave = await uploadNewFiles(tripId, files, originalFilesRef.current)
 
-        await saveCanvasState(tripId, [...elements], filesToSave)
-        console.log('[BoardWrapper] Canvas flushed for share')
+        const saved = await saveCanvasState(tripId, [...elements], filesToSave, versionRef.current)
+        versionRef.current = saved.last_modified ?? null
       } catch (err) {
-        console.error('[BoardWrapper] Failed to flush canvas:', err)
+        if (err instanceof CanvasConflictError) handleConflict()
+        else console.error('[BoardWrapper] Failed to flush canvas:', err)
       }
 
       window.dispatchEvent(new CustomEvent('canvas-flushed'))
@@ -192,7 +238,7 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
 
     window.addEventListener('flush-canvas', handleFlush)
     return () => window.removeEventListener('flush-canvas', handleFlush)
-  }, [tripId, readOnly])
+  }, [tripId, readOnly, handleConflict])
 
   // Auto-save with debounce
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -213,15 +259,16 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
         // Upload new user images to Supabase Storage, keep original URL-based files
         const filesToSave = await uploadNewFiles(tripId, files, originalFilesRef.current)
 
-        await saveCanvasState(tripId, [...elements], filesToSave)
-        console.log('🎨 Canvas saved (images uploaded to storage)')
+        const saved = await saveCanvasState(tripId, [...elements], filesToSave, versionRef.current)
+        versionRef.current = saved.last_modified ?? null
         // Notify other components (e.g. BudgetPanel) that the canvas changed
         window.dispatchEvent(new CustomEvent('canvas-saved', { detail: { tripId } }))
       } catch (err) {
-        console.error('Failed to save:', err)
+        if (err instanceof CanvasConflictError) handleConflict()
+        else console.error('Failed to save:', err)
       }
     }, SAVE_DEBOUNCE_MS)
-  }, [tripId, readOnly, loading, initialData])
+  }, [tripId, readOnly, loading, initialData, handleConflict])
 
   // Cleanup
   useEffect(() => {
@@ -239,7 +286,12 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
   }
 
   return (
-    <div className="w-full h-full">
+    <div className="relative w-full h-full">
+      {conflictNotice && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-900 shadow">
+          The board changed elsewhere, so it was reloaded. Your last edit wasn&apos;t saved.
+        </div>
+      )}
       <Excalidraw
         key={tripId || 'empty'}
         initialData={initialData}

@@ -35,12 +35,16 @@ ln -s ../.env .env.local          # Symlink to root .env
 ```bash
 cd frontend
 npm run build        # Production build
-npm run lint         # Run linter
+npm run lint         # Run linter (eslint 9)
+npm test             # Unit tests (Vitest)
 ```
 
 ### Run tests
 ```bash
-# All unit tests (from project root, venv must be active)
+# Test dependencies (pytest is not in requirements.txt)
+cd backend && pip install -r requirements-dev.txt
+
+# All unit tests (venv must be active, run from backend/)
 python -m pytest tests/unit/ -v
 
 # Specific test file
@@ -48,21 +52,24 @@ python -m pytest tests/unit/test_url_builder.py -v
 
 # With short summary
 python -m pytest tests/unit/ --tb=short
+
+# Integration tests — need the local stack (`supabase start` from the repo root); skipped otherwise
+python -m pytest tests/integration -v
 ```
 
-Config: `pytest.ini` at project root. Tests live in `tests/unit/`. Skills are on `pythonpath` via pytest config.
+Config: `backend/pytest.ini`. Tests live in `backend/tests/{unit,integration}/`. Run from `backend/` so `app` and `skills` are importable.
 
 ### Environment
 - Root `.env` has all secrets (see `.env.example`)
-- Frontend symlinks `.env.local -> ../.env` (already set up)
+- Frontend symlinks `.env.local -> ../.env` (see Frontend setup)
 - Backend loads `.env` from project root automatically
 
 ### Database
-- Supabase project — migrations in `backend/migrations/001-005.sql`
-- Run via Supabase SQL Editor or CLI
+- Supabase project — migrations in `supabase/migrations/` (Supabase CLI layout)
+- Local: `supabase start && supabase db reset`; remote: `supabase db push`
 
 ## Key conventions
 - Backend: FastAPI + Python, Pydantic models, async endpoints
 - Frontend: Next.js 16 + React 19 + Tailwind, App Router
-- Skills: each skill is a Python package in root `skills/` — exports `TOOLS` list and `PROMPT` string
+- Skills: each skill is a Python package in `backend/skills/` — exports `TOOLS` list and `PROMPT` string
 - Agent: LangGraph ReAct pattern, swappable LLM (Gemini default, Anthropic optional)

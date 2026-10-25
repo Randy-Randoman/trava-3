@@ -3,18 +3,22 @@ TRAVA Backend - FastAPI Application Entry Point
 Run with: uvicorn main:app --reload
 """
 
+import logging
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from dotenv import load_dotenv
+from starlette.routing import Route
 
+from app.api.mcp import mcp_http_app
 from app.services.playwright import shutdown_playwright, warmup_playwright
-from app.core.auth import require_auth
 
-# Load environment variables from root .env
-load_dotenv(dotenv_path="../.env")
+# Show our own INFO logs; third-party libraries (e.g. httpx, which logs request URLs) stay at WARNING
+logging.basicConfig(format="%(levelname)s %(name)s: %(message)s")
+logging.getLogger("app").setLevel(logging.INFO)
+logging.getLogger("skills").setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 @asynccontextmanager
@@ -22,7 +26,8 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle for the application."""
     import asyncio
     asyncio.create_task(warmup_playwright())
-    yield
+    async with mcp_app.router.lifespan_context(mcp_app):
+        yield
     # Shutdown: clean up shared resources
     await shutdown_playwright()
 
@@ -36,7 +41,9 @@ app = FastAPI(
 
 # Configure CORS for frontend communication
 # ALLOWED_ORIGINS env var should be comma-separated list of domains
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+logger.info("CORS allowed origins: %s", allowed_origins)
 
 app.add_middleware(
     CORSMiddleware,
@@ -62,26 +69,13 @@ async def health_check():
 # API routes
 from app.api.chat import router as chat_router
 from app.api.trips import router as trips_router
+from app.api.oauth_metadata import router as oauth_metadata_router
 
 app.include_router(chat_router, tags=["chat"])
 app.include_router(trips_router, tags=["trips"])
+app.include_router(oauth_metadata_router, tags=["oauth"])
 
+# Remote MCP server: only /mcp goes to the MCP app, so other paths keep FastAPI's 404/405/redirects
+mcp_app = mcp_http_app(allowed_origins)
+app.router.routes.append(Route("/mcp", endpoint=mcp_app))
 
-# ================================================
-# Feedback endpoint
-# ================================================
-
-class FeedbackRequest(BaseModel):
-    feedback: str
-    username: str = ""
-
-
-@app.post("/feedback")
-async def submit_feedback(body: FeedbackRequest, user_id: str = Depends(require_auth)):
-    """Accept user feedback and save to database."""
-    from app.services.database import db
-    try:
-        result = await db.save_feedback(user_id, body.username, body.feedback)
-        return {"status": "ok", "id": result.get("id", "")}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))

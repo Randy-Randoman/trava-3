@@ -4,8 +4,6 @@ LangGraph ReAct agent graph.
 Pattern: START -> agent_node -> should_continue? -> tool_node (loop) or END
 """
 
-import sys
-from pathlib import Path
 from langchain_core.messages import SystemMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
@@ -13,12 +11,6 @@ from langgraph.prebuilt import ToolNode
 from app.agent.state import AgentState
 from app.core.config import settings
 from app.core.prompts import build_system_prompt
-
-# Ensure the repo root is on sys.path so `skills` is importable.
-# The backend runs from backend/, but skills/ lives at the repo root.
-_repo_root = str(Path(__file__).resolve().parents[3])
-if _repo_root not in sys.path:
-    sys.path.insert(0, _repo_root)
 
 from skills import load_all_skills
 
@@ -31,7 +23,7 @@ def _get_llm():
         from langchain_anthropic import ChatAnthropic
 
         return ChatAnthropic(
-            model="claude-sonnet-4.6",
+            model="claude-sonnet-5-5",
             api_key=settings.ANTHROPIC_API_KEY,
         )
     else:
@@ -69,7 +61,7 @@ def create_agent_graph(trip_id: str, user_id: str):
 
     # --- Nodes ---
 
-    def agent_node(state: AgentState):
+    async def agent_node(state: AgentState):
         """Call the LLM with the current messages."""
         messages = state["messages"]
 
@@ -77,7 +69,7 @@ def create_agent_graph(trip_id: str, user_id: str):
         if not messages or not isinstance(messages[0], SystemMessage):
             messages = [SystemMessage(content=system_prompt)] + messages
 
-        response = llm_with_tools.invoke(messages)
+        response = await llm_with_tools.ainvoke(messages)
         return {"messages": [response]}
 
     def should_continue(state: AgentState):

@@ -1,14 +1,12 @@
 'use client'
 
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect } from 'react'
 import { ChatBubble } from './ChatBubble'
 import { InputArea } from './InputArea'
 import { ThinkingIndicator } from './ThinkingIndicator'
 import { StatusToast } from './StatusToast'
 import { useChat } from '@/lib/hooks/useChat'
-import { useAuth } from '@/lib/auth'
 import ShareButton from '@/components/ShareButton'
-import FeedbackModal from '@/components/FeedbackModal'
 
 interface ChatInterfaceProps {
   tripId?: string  // Current trip ID
@@ -19,8 +17,6 @@ export function ChatInterface({ tripId, onDashboard }: ChatInterfaceProps) {
   const { messages, isLoading, status, boardReady, sendMessage } = useChat({
     tripId: tripId || ''  // Pass tripId to useChat
   })
-  const { user } = useAuth()
-  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom when new messages arrive
@@ -44,12 +40,6 @@ export function ChatInterface({ tripId, onDashboard }: ChatInterfaceProps) {
         </div>
         <div className="flex items-center gap-2">
           {tripId && <ShareButton tripId={tripId} />}
-          <button
-            onClick={() => setFeedbackOpen(true)}
-            className="px-3 py-1.5 text-xs font-bold bg-white border-2 border-trava-black text-trava-black transition-all hover:bg-adventure-orange hover:shadow-brutal hover:translate-x-[-1px] hover:translate-y-[-1px]"
-          >
-            Feedback
-          </button>
           {onDashboard && (
             <button
               onClick={onDashboard}
@@ -72,7 +62,7 @@ export function ChatInterface({ tripId, onDashboard }: ChatInterfaceProps) {
             </div>
             <h2 className="text-xl font-black text-trava-black mb-2 uppercase">Welcome to TRAVA!</h2>
             <p className="text-gray-500 text-sm max-w-xs font-medium">
-              Tell me about your dream trip and I'll help you plan the perfect itinerary.
+              Tell me about your dream trip and I&apos;ll help you plan the perfect itinerary.
             </p>
           </div>
         ) : (
@@ -106,14 +96,6 @@ export function ChatInterface({ tripId, onDashboard }: ChatInterfaceProps) {
 
       {/* Input Area */}
       <InputArea onSend={sendMessage} disabled={isLoading} />
-
-      {/* Feedback Modal */}
-      {feedbackOpen && (
-        <FeedbackModal
-          userEmail={user?.email || 'anonymous'}
-          onClose={() => setFeedbackOpen(false)}
-        />
-      )}
     </div>
   )
 }

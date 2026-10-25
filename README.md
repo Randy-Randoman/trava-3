@@ -10,11 +10,11 @@ Group travel planning is messy. Shared Google Docs don't scale past three people
 
 Trava is a different shape: a **chat agent + a shared visual canvas**. You tell the agent what you want ("find us a 3-night stay in Lisbon under €150 per night"), it hits Booking.com for real prices and drops cards onto an Excalidraw board. The agent *sees* the board, so it can reason about what's already there — add activities around an existing hotel, replace a pricey option, group by day — without wiping what you've placed.
 
-The agent is swappable (Gemini or Claude) and the tool layer is modular: each capability is a Python package in `skills/` that exports a list of LangChain tools and a prompt. Add a folder, restart, done.
+The agent is swappable (Gemini or Claude) and the tool layer is modular: each capability is a Python package in `backend/skills/` that exports a list of LangChain tools and a prompt. Add a folder, restart, done.
 
 ## Status
 
-**Self-hosted only.** There is no hosted version and there won't be one — you'll set up Supabase and your own LLM + search keys. Early single-maintainer project, runs locally today, opened for collaboration.
+**Self-hosted only.** There is no hosted version and there won't be one — you'll set up Supabase and your own LLM + search keys. A personal project, shared as-is. Run it locally, or deploy it yourself (see [`docs/deploy.md`](docs/deploy.md)).
 
 ## Features
 
@@ -32,8 +32,9 @@ The agent is swappable (Gemini or Claude) and the tool layer is modular: each ca
 
 ### Local tooling
 
-- Node.js 18+
+- Node.js 20.9+ (required by Next.js 16)
 - Python 3.11+
+- [Supabase CLI](https://supabase.com/docs/guides/cli) — to apply migrations (and for the local stack the integration tests use)
 - macOS / Linux tested; Windows via WSL should work but is unverified
 
 ### External services you must provision yourself
@@ -67,9 +68,10 @@ npm install
 ln -s ../.env .env.local             # frontend reads NEXT_PUBLIC_* from the same file
 npm run dev                          # http://localhost:3000
 
-# 4. Database — run the migrations once
-# Paste each of backend/migrations/001…007.sql into the Supabase SQL Editor in order.
-# Full walkthrough: docs/supabase-setup.md
+# 4. Database — apply the migrations once (Supabase CLI, from the repo root)
+supabase link --project-ref <your-project-ref>
+supabase db push
+# Or run the files in supabase/migrations/ in order in the SQL Editor — see docs/supabase-setup.md
 ```
 
 Open [http://localhost:3000](http://localhost:3000) and sign up.
@@ -90,7 +92,8 @@ Your first trip end-to-end:
 ```
 frontend/   Next.js 16 + React 19 + Tailwind (~35% chat, ~65% Excalidraw)
 backend/    FastAPI + LangGraph ReAct agent
-skills/     Auto-discovered tool packages (booking, board, web_search)
+backend/skills/   Auto-discovered tool packages (booking, board, web_search)
+supabase/         Migrations + local stack config (Supabase CLI)
 ```
 
 - **Frontend** — dashboard, chat panel, Excalidraw canvas, shareable boards.
@@ -146,18 +149,19 @@ flowchart LR
     api --> db
     api -. "verify JWT (JWKS)" .-> auth
 
-    ext -. "OAuth 2.1 via Supabase Auth (planned)" .-> auth
-    ext -. "Bearer token (planned)" .-> mcp
-    mcp -. "planned" .-> SK
-    db -. "Realtime (planned)" .-> ui
+    ext -- "OAuth 2.1 via Supabase Auth" --> auth
+    ext -- "Bearer token" --> mcp
+    mcp --> SK
+    mcp -. "verify token (JWKS + grant check)" .-> auth
+    db -- "Realtime" --> ui
 ```
 
 ## Adding a skill
 
 Skills are the extensibility hook. Every capability the agent has — searching Booking.com, reading the board, web search — is a skill. Adding one is ~20 lines.
 
-1. Make a new folder under `skills/`, e.g. `skills/weather/`.
-2. Create `skills/weather/__init__.py`:
+1. Make a new folder under `backend/skills/`, e.g. `backend/skills/weather/`.
+2. Create `backend/skills/weather/__init__.py`:
 
    ```python
    from .tools import get_weather
@@ -166,7 +170,7 @@ Skills are the extensibility hook. Every capability the agent has — searching 
    PROMPT = "You can call get_weather(city) to fetch the forecast. Use it when the user asks about weather."
    ```
 
-3. Create `skills/weather/tools.py`:
+3. Create `backend/skills/weather/tools.py`:
 
    ```python
    from langchain_core.tools import tool
@@ -178,21 +182,56 @@ Skills are the extensibility hook. Every capability the agent has — searching 
        return f"Sunny in {city}, 22°C"
    ```
 
-4. Restart the backend. `skills/__init__.py` auto-discovers the new package and the agent picks up the tool + prompt on next boot.
+4. Restart the backend. `backend/skills/__init__.py` auto-discovers the new package and the agent picks up the tool + prompt on next boot.
 
-That's the contract. For a real example, look at `skills/booking/` or `skills/web_search/`.
+That's the contract. For a real example, look at `backend/skills/booking/` or `backend/skills/web_search/`.
 
-## Using with Claude Code / Claude Cowork (experimental)
+## Using with Claude Code / MCP
 
-The skills are designed to be reusable outside the bundled LangGraph agent. Anthropic's **Claude Code** (CLI) and **Claude Cowork** (desktop agent) both consume tools via [MCP](https://modelcontextprotocol.io/), so a thin MCP server wrapping the existing skills would let either driver the trip board directly.
+The backend serves a remote MCP server at `/mcp`, so Claude Code, claude.ai, Claude Cowork or any other MCP client can plan trips on your boards. Sign-in is OAuth 2.1 with Supabase Auth: there are no tokens to copy.
 
-The wrapper doesn't exist yet — it's a planned follow-up (see open issues). Specifically it would:
+1. **One-time Supabase setup:** enable the OAuth 2.1 server, set the authorization path to `/oauth/consent`, allow dynamic client registration, and use an asymmetric JWT signing key. Set `PUBLIC_BASE_URL` on the backend to its public URL. Details: [OAuth for agents](docs/deploy.md#oauth-for-agents).
+2. **Connect Claude Code:**
 
-- Wrap the `TOOLS` from each skill as MCP tools
-- Replace the agent's `InjectedState("trip_id")` with an explicit `trip_id` argument
-- Reuse `backend/app/core/auth.py` for JWT-based ownership checks
+   ```bash
+   claude mcp add --transport http trava <PUBLIC_BASE_URL>/mcp
+   ```
 
-Contributions welcome.
+   On first use the browser opens: log in to TRAVA, then press **Allow**.
+3. **Ask:** *"Create a trip 'Lisbon' and add 3 hotels under €150 for 12-15 May."*
+4. **Open the board** in the app. It updates live while the agent works.
+
+**claude.ai / Claude Cowork / ChatGPT** need a public HTTPS URL (e.g. a Railway deploy); `localhost` only works for Claude Code on the same machine. Menu paths as of September 2026:
+
+- **claude.ai / Cowork:** Customize → Connectors → + → Add custom connector, paste `<PUBLIC_BASE_URL>/mcp`, Add, then Connect; log in and press **Allow**.
+- **ChatGPT:** Settings → Security and login → turn on Developer mode; then Plugins → +: a name, MCP server URL `<PUBLIC_BASE_URL>/mcp`, Authentication **OAuth**; log in and press **Allow**.
+
+### Tools
+
+| Tool | What it does |
+|------|--------------|
+| `list_trips` | List your trips |
+| `create_trip` | Create a trip with an empty board |
+| `board_read` | Show a board's items and their IDs |
+| `board_add_items` | Place hotel/activity cards on a board |
+| `board_remove_items` | Remove items by ID (at least 4 characters, as shown by `board_read`) |
+| `board_clear` | Remove all agent-placed items, keeping your own drawings |
+| `booking_search` | Search Booking.com for hotels with real prices |
+| `web_search` | Search the web (Tavily) |
+| `image_search` | Search for images (Tavily) |
+
+Every board tool checks that the trip is yours.
+
+### Security
+
+A connected app acts as you on your trips. Disconnect it under **Connected apps** (dashboard → `/settings/connections`); this takes effect immediately, because the backend checks the grant on every request. Agent tokens only work on `/mcp`; the rest of the app API rejects them.
+
+### Known limitations
+
+- No rate limiting on agent calls: Booking.com scraping and Tavily usage are on you.
+- An upstream Supabase bug ([supabase/auth#2820](https://github.com/supabase/auth/issues/2820)) may break the consent step for some public MCP clients.
+- If you sign up in the middle of connecting, you end up on the dashboard. Reconnect from the client afterwards.
+- Supabase gives every token the audience `authenticated` (it ignores RFC 8707 `resource`), so an agent's token is a full project token: until it expires it also works directly against Supabase's Data API, limited by row-level security to your own data. Disconnecting stops `/mcp` at once; direct Supabase access ends when the token expires (the project's JWT expiry, 1 hour by default).
 
 ## Environment variables
 
@@ -207,8 +246,9 @@ Contributions welcome.
 | `ANTHROPIC_API_KEY` | If Claude | [console.anthropic.com](https://console.anthropic.com) |
 | `TAVILY_API_KEY` | Yes | [tavily.com](https://tavily.com) — web + image search |
 | `NEXT_PUBLIC_BACKEND_URL` | Yes | Usually `http://localhost:8000` in dev |
+| `PUBLIC_BASE_URL` | For MCP | Backend's public URL as given to MCP clients; defaults to `http://localhost:8000` |
 
-See `.env.example` for the full template.
+See `.env.example` for the full template. For deployments, the backend also reads `ALLOWED_ORIGINS` (CORS) — see [`docs/deploy.md`](docs/deploy.md).
 
 ## Project structure
 
@@ -218,7 +258,7 @@ trava/
 │   └── src/
 │       ├── app/                # Pages (home, dashboard, login, board)
 │       ├── components/         # Canvas, chat, auth
-│       ├── lib/                # API helpers, hooks, auth
+│       ├── lib/                # API helpers, hooks, auth (+ Vitest tests)
 │       └── types/              # TypeScript types
 │
 ├── backend/                    # FastAPI app
@@ -230,31 +270,45 @@ trava/
 │   │   ├── logic/              # Transformer (Excalidraw element generation)
 │   │   ├── models/             # Pydantic schemas
 │   │   └── services/           # Database, Playwright
-│   └── migrations/             # SQL migrations (001–007)
+│   ├── skills/                 # Skill packages (auto-discovered)
+│   │   ├── booking/            # Booking.com search
+│   │   ├── board/              # Board read/add/remove/clear
+│   │   └── web_search/         # Tavily web + image search
+│   └── tests/
+│       ├── unit/               # Pytest unit tests
+│       └── integration/        # Pytest against a local Supabase stack
 │
-├── skills/                     # Skill packages (auto-discovered)
-│   ├── booking/                # Booking.com search
-│   ├── board/                  # Board read/add/remove/clear
-│   └── web_search/             # Tavily web + image search
+├── supabase/
+│   ├── config.toml             # Local stack config (Supabase CLI)
+│   └── migrations/             # SQL migrations (001–010, timestamped)
 │
-├── tests/unit/                 # Pytest suite (~55 tests)
-├── docs/                       # Contributor docs
+├── docs/                       # Setup, deployment and plan docs
 ├── .env.example                # Environment template
-└── docker-compose.yml          # Docker setup (local)
+└── docker-compose.yml          # Docker Compose setup
 ```
 
 ## Tests
 
 ```bash
-source backend/.venv/bin/activate
-python -m pytest tests/unit/ -v
+# Backend (venv active)
+cd backend
+pip install -r requirements-dev.txt          # pytest lives here, not in requirements.txt
+python -m pytest tests/unit -v               # unit tests, no services needed
+python -m pytest tests/integration -v        # needs `supabase start` (Docker + Supabase CLI) from the repo root; skips otherwise
+
+# Frontend (Vitest)
+cd ../frontend && npm test
 ```
 
-~55 unit tests covering URL building, URL cleaning, auth, share tokens, and models. Runs in under a second. Integration / E2E tests are not included.
+Unit tests cover URL building and cleaning, auth, share tokens, board tools, budget parsing and models. Integration tests check row-level security, storage rules and the main API flow. No E2E tests.
+
+## Deployment
+
+Docker Compose (local or VPS) and Railway: [`docs/deploy.md`](docs/deploy.md).
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md). TL;DR: open an issue before a big PR, match existing code style, add a test if the change is non-trivial.
+This is a personal project shared as-is. It isn't accepting contributions or issues; feel free to fork it.
 
 ## Design docs
 

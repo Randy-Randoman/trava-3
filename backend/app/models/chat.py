@@ -3,15 +3,8 @@ Chat schemas - Message & History data validation
 """
 
 from pydantic import BaseModel
-from typing import List, Literal, Optional
+from typing import List
 from datetime import datetime
-
-
-class Message(BaseModel):
-    """Single chat message"""
-    role: Literal["user", "assistant", "system"]
-    content: str
-    timestamp: Optional[str] = None
 
 
 class ChatRequest(BaseModel):
@@ -20,8 +13,3 @@ class ChatRequest(BaseModel):
     message: str
     # NO history field - backend loads from database
 
-
-class ChatResponse(BaseModel):
-    """Chat response to frontend"""
-    response: str
-    status: Optional[str] = None

@@ -32,11 +32,12 @@ class Settings:
     """Application settings loaded from environment variables"""
 
     # Supabase
-    SUPABASE_URL: str = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "")
-    # ANON_KEY: Not used in backend (used by frontend only)
-    SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
-    # SERVICE_KEY: Used by backend to bypass RLS (required for MVP without auth)
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
+    # SERVICE_KEY: Used by backend to bypass RLS (ownership is checked in the API layer)
     SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
+
+    # The backend's public URL, as given to agents (the OAuth resource is <PUBLIC_BASE_URL>/mcp)
+    PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000")
 
     # Google AI (for langchain-google-genai)
     GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
@@ -49,13 +50,6 @@ class Settings:
 
     # LLM provider: "google" (default) or "anthropic"
     LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "google")
-
-    # Application settings
-    DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
-
-    # URLs
-    BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8000")
-    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 
 settings = Settings()

@@ -2,9 +2,9 @@
 
 ## Vision
 
-Travel planning platform powered by AI agents. User chats with the agent, agent searches real providers (Booking.com, web), places results as interactive cards on an Excalidraw canvas. Every hotel card carries an affiliate link — we earn commission on bookings.
+Travel planning platform powered by AI agents. User chats with the agent, agent searches real providers (Booking.com, web), places results as interactive cards on an Excalidraw canvas. Hotel cards link straight to the Booking.com page with dates pre-filled. A personal showcase project, self-hosted.
 
-**MVP:** Chat → search Booking.com → real hotels with affiliate links → add to board as cards → iterate (add more, remove, replace) → user books via card links.
+**MVP:** Chat → search Booking.com → real hotels with booking links → add to board as cards → iterate (add more, remove, replace) → user books via card links.
 
 ---
 
@@ -13,12 +13,11 @@ Travel planning platform powered by AI agents. User chats with the agent, agent 
 | Topic | Decision | Rationale |
 |-------|----------|-----------|
 | **Agent** | LangGraph ReAct | LLM-agnostic, composable, simple loop |
-| **LLM** | Swappable (Gemini default, Anthropic optional) | Both via langchain, env var config |
-| **Skills** | Python packages at root `skills/`, auto-discovered | Easy to add, signals future independence |
+| **LLM** | Swappable: Gemini (default) or Claude Sonnet 5.5 | Both via langchain, env var config |
+| **Skills** | Python packages in `backend/skills/`, auto-discovered | Easy to add, signals future independence |
 | **Board** | Incremental (append/remove, not full replace) | Fixes trava-2's core problem |
 | **Board state** | `board_items` JSONB on trips table | Agent can read what's on the board |
 | **Hotel search** | Playwright + Booking.com | Real results, real links |
-| **Affiliate** | CJ deep links | Revenue on every booking |
 | **Tool → board data** | Tools return structured JSON, not text | LLMs drop URLs when converting text→JSON |
 | **Tool state injection** | `InjectedState("trip_id")` | LLMs hallucinate IDs if given as a normal param |
 
@@ -89,9 +88,9 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 | [#11] Image pipeline fixed: `search_tavily_image` converted to async (was blocking event loop), Booking.com scraper now tries `data-src`/`srcset` for lazy-loaded images | ✅ |
 | [#12] `description` field flows through entire pipeline: `booking_search` → `generate_card_elements` → `create_card_group`. Prompt schema updated. | ✅ |
 | [#13] System prompt + web_search skill prompt guide agent to search Skyscanner/Google Flights/Kayak directly for flight bookingUrls | ✅ |
-| [#14] `POST /feedback` endpoint wired up in `main.py` — frontend modal → backend → DB | ✅ |
+| [#14] `POST /feedback` endpoint wired up in `main.py` — frontend modal → backend → DB | ✅ *(removed in Phase 10)* |
 | Session params stripped from scraped hotel URLs (compared with working skills-try-out repo — `aid`/`sid`/`label` params are Playwright-session-bound and break outside it) | ✅ |
-| Booking params (checkin/checkout/adults/rooms) appended to clean hotel URL before CJ wrapping (ported from skills-try-out `add_booking_params` pattern) | ✅ |
+| Booking params (checkin/checkout/adults/rooms) appended to clean hotel URL before CJ wrapping (ported from skills-try-out `add_booking_params` pattern) | ✅ *(CJ wrapping removed in Phase 10)* |
 
 ### Known issues (moved to Phase 5)
 
@@ -107,7 +106,7 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 - [ ] Activity cards have links to source pages
 - [ ] Flight cards link to booking sites (not blog posts)
 - [ ] Agent always uses search tools, never hallucinates data
-- [x] Feedback modal submits successfully from dashboard
+- [x] Feedback modal submits successfully from dashboard *(removed in Phase 10)*
 
 ---
 
@@ -135,7 +134,7 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 | What was done | Status |
 |---------------|--------|
 | Extracted `build_search_url()`, `clean_hotel_url()`, `append_booking_params()` from `search.py` into standalone pure functions | ✅ |
-| `tests/unit/test_deeplink.py` — 6 tests for CJ affiliate link generation (with/without credentials, URL encoding) | ✅ |
+| `tests/unit/test_deeplink.py` — 6 tests for CJ affiliate link generation (with/without credentials, URL encoding) | ✅ *(removed in Phase 10)* |
 | `tests/unit/test_models.py` — 7 tests for SearchParams/Hotel Pydantic models (defaults, validation, edge cases) | ✅ |
 | `tests/unit/test_url_builder.py` — 16 tests for Booking.com search URL construction (filters, sort, encoding, case insensitivity) | ✅ |
 | `tests/unit/test_url_cleaning.py` — 13 tests for URL cleaning + booking param appending (searchresults bug regression, session param stripping) | ✅ |
@@ -186,14 +185,14 @@ Fixes: `InjectedState("trip_id")` — LLM was hallucinating fake trip IDs like `
 
 | # | Task | Details | Status |
 |---|------|---------|--------|
-| 1 | Install `@supabase/ssr`, create server client | `frontend/src/lib/supabase/server.ts` — cookie-based server client | ✅ |
+| 1 | Install `@supabase/ssr`, create server client | `frontend/src/lib/supabase/server.ts` — cookie-based server client | ✅ *(removed in Phase 10)* |
 | 2 | Add `signUp` to AuthContext | `signUp(email, password, fullName)` with `full_name` in `options.data` | ✅ |
 | 3 | `/signup` page | Form: Full Name, Email, Password. Brutalist styling. Success: "Check your email" message | ✅ |
 | 4 | Cross-links login ↔ signup | Both pages link to each other | ✅ |
-| 5 | `/auth/callback` route | Exchanges code for session, redirects to `/dashboard` or `/login` | ✅ |
-| 6 | Migration 007: `is_approved` | `backend/migrations/007_user_approval.sql` — **user must run in Supabase SQL Editor** | ✅ (code written) |
-| 7 | `/pending-approval` page | "Account Under Review" + "Check again" + "Sign out" buttons | ✅ |
-| 8 | Approval check in ProtectedRoute | Fetches `is_approved` from profiles, redirects to `/pending-approval` if false | ✅ |
+| 5 | `/auth/callback` route | Exchanges code for session, redirects to `/dashboard` or `/login` | ✅ *(removed in Phase 10)* |
+| 6 | Migration 007: `is_approved` | `backend/migrations/007_user_approval.sql` — **user must run in Supabase SQL Editor** | ✅ (code written) *(removed in Phase 10)* |
+| 7 | `/pending-approval` page | "Account Under Review" + "Check again" + "Sign out" buttons | ✅ *(removed in Phase 10)* |
+| 8 | Approval check in ProtectedRoute | Fetches `is_approved` from profiles, redirects to `/pending-approval` if false | ✅ *(removed in Phase 10)* |
 
 ### Bugs fixed during Phase 7
 
@@ -213,9 +212,9 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 1. **Run migration 007** in Supabase SQL Editor — file is at `backend/migrations/007_user_approval.sql`. Copy-paste and run it.
 2. **Configure Resend as SMTP provider** — Supabase dashboard → Authentication → Settings → SMTP. Enable "Custom SMTP" and enter Resend SMTP credentials (host: `smtp.resend.com`, port: 465, user: `resend`, pass: your Resend API key). This makes confirmation emails go through Resend instead of Supabase's built-in (rate-limited) sender.
 3. **Enable email confirmations** — Supabase dashboard → Authentication → Settings → Email. Make sure "Enable email confirmations" is ON so users must verify their email before accessing the app.
-4. **Check Supabase redirect URL** — Supabase dashboard → Authentication → URL Configuration. The "Site URL" should be `http://localhost:3000` and "Redirect URLs" should include `http://localhost:3000/auth/callback`. Without this, the email confirmation link won't work.
-5. **Test the full flow** — sign up with a real email, confirm via Resend email, see pending-approval page, manually approve in DB (`UPDATE profiles SET is_approved = true WHERE id = '...';`), refresh, access dashboard.
-6. **Approve existing users** — any users who signed up before migration 007 will have `is_approved = false` and get locked out. Run: `UPDATE profiles SET is_approved = true;` to approve all existing users.
+4. **Check Supabase redirect URL** — Supabase dashboard → Authentication → URL Configuration. The "Site URL" should be `http://localhost:3000` and "Redirect URLs" should include `http://localhost:3000/auth/callback`. Without this, the email confirmation link won't work. *(removed in Phase 10)*
+5. **Test the full flow** — sign up with a real email, confirm via Resend email, see pending-approval page, manually approve in DB (`UPDATE profiles SET is_approved = true WHERE id = '...';`), refresh, access dashboard. *(removed in Phase 10)*
+6. **Approve existing users** — any users who signed up before migration 007 will have `is_approved = false` and get locked out. Run: `UPDATE profiles SET is_approved = true;` to approve all existing users. *(removed in Phase 10)*
 
 ### Not in this phase
 - Backend JWT validation (see Phase 8)
@@ -231,15 +230,15 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 | # | Task | Details | Status |
 |---|------|---------|--------|
 | 1 | [#33] Share button on trip canvas | `ShareButton` component: flushes canvas, calls `POST /trips/{trip_id}/share`, copies share link to clipboard with "Copied!" confirmation | ✅ |
-| 2 | [#34] Shared board: no agent | `/board/[share_token]` is view-only, no chat panel or agent. Just the canvas with clickable affiliate links | ✅ |
-| 3 | [#35] Feedback button on trip canvas | `FeedbackModal` extracted to shared component, Feedback button added to ChatInterface header | ✅ |
+| 2 | [#34] Shared board: no agent | `/board/[share_token]` is view-only, no chat panel or agent. Just the canvas with clickable affiliate links | ✅ *(affiliate links removed in Phase 10)* |
+| 3 | [#35] Feedback button on trip canvas | `FeedbackModal` extracted to shared component, Feedback button added to ChatInterface header | ✅ *(removed in Phase 10)* |
 
 ### Bugs fixed during Phase 8
 
 | What was done | Status |
 |---------------|--------|
 | Public board blank canvas: `halftone-overlay` (fixed full-screen div at z-index 0) was covering Excalidraw's rendering layer. Fixed with `relative z-10` on board page container. | ✅ |
-| Extracted `FeedbackModal` from dashboard into shared `components/FeedbackModal.tsx` for reuse | ✅ |
+| Extracted `FeedbackModal` from dashboard into shared `components/FeedbackModal.tsx` for reuse | ✅ *(removed in Phase 10)* |
 
 ### Tests added
 - `tests/unit/test_share.py` — 6 tests for share endpoints (token generation, reuse, public board data, 404s)
@@ -262,7 +261,7 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 |---|------|---------|--------|
 | 1 | JWT auth dependency | `backend/app/core/auth.py` — `require_auth` FastAPI dependency, JWKS (ES256) with cached keys, audience validation | ✅ |
 | 2 | Trip ownership helper | `verify_trip_owner(trip_id, user_id)` — 404 if not found, 403 if wrong user, returns trip dict | ✅ |
-| 3 | Protect user-scoped endpoints | `Depends(require_auth)` on: `POST /trips`, `GET /trips`, `GET /trips/latest/id`, `POST /feedback` | ✅ |
+| 3 | Protect user-scoped endpoints | `Depends(require_auth)` on: `POST /trips`, `GET /trips`, `GET /trips/latest/id`, `POST /feedback` | ✅ *(`/feedback` removed in Phase 10)* |
 | 4 | Protect trip-scoped endpoints | Auth + ownership on: canvas GET/PUT, trip GET/PATCH/DELETE, budget, share | ✅ |
 | 5 | Protect chat endpoints | Auth + ownership on: `POST /chat/stream`, `GET /chat/messages/{trip_id}` | ✅ |
 | 6 | Frontend: Bearer token | `getAuthHeaders()` sends `Authorization: Bearer <access_token>` | ✅ |
@@ -288,7 +287,7 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 | `GET /`, `GET /health` | None | None |
 | `GET /trips/public/{share_token}` | None | None |
 | `POST /trips`, `GET /trips`, `GET /trips/latest/id` | JWT → user_id | Scoped by user_id |
-| `POST /feedback` | JWT → user_id | None (standalone) |
+| `POST /feedback` *(removed in Phase 10)* | JWT → user_id | None (standalone) |
 | `GET/PUT /trips/{trip_id}/canvas` | JWT → user_id | verify owner |
 | `GET /trips/{trip_id}` | JWT → user_id | verify owner |
 | `PATCH/DELETE /trips/{trip_id}` | JWT → user_id | verify owner |
@@ -305,7 +304,7 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 
 ---
 
-## Phase 10: Publish-Ready Cleanup
+## Phase 10: Publish-Ready Cleanup ✅
 
 **Goal:** The public repo is safe, accurate and easy to run. It's a personal showcase: people can use it or take inspiration, but it doesn't accept contributions.
 
@@ -342,9 +341,9 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 
 ### Manual steps (user must do — agent cannot)
 - Apply the security migration to the live Supabase project (`supabase link` + `supabase db push`, or the SQL editor)
-- GitHub: add a description and topics; keep Issues on for own tracking only
+- ~~GitHub: add a description and topics~~ ✅ (Issues stay on for own tracking only)
 - ~~Close stale issues #18, #19, #20~~ ✅ closed
-- Delete the stale `claude/debug-railway-error-NuJhs` branch and the local `worktree-agent-*` branches
+- ~~Delete the stale `claude/debug-railway-error-NuJhs` branch and the local `worktree-agent-*` branches~~ ✅ (its CORS-parsing fix moved into #51)
 
 ### Backlog (not this phase)
 - Store card images in Supabase storage instead of proxying them
@@ -353,7 +352,7 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 
 ---
 
-## Phase 11: MCP Server (Bring Your Own Agent)
+## Phase 11: MCP Server (Bring Your Own Agent) ✅
 
 **Goal:** External agents (Claude Code, Claude Cowork, any MCP client) can plan trips on the TRAVA board.
 
@@ -381,7 +380,9 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 ### Manual steps (user must do — agent cannot)
 - Supabase → Authentication → OAuth Server: enable it, authorization path `/oauth/consent`, allow dynamic client registration
 - Supabase JWT signing key must be asymmetric (ES256/RS256)
-- Set `PUBLIC_BASE_URL` on the backend service (Railway)
+- Set `PUBLIC_BASE_URL` on the backend service (Railway) to the exact public domain (custom domain if used): `/mcp` returns 421 for any other `Host`
+- Backend needs `SUPABASE_URL` set, or it won't start
+- Apply migrations 009 (agent grants function) and 010 (Realtime on `canvas_states`)
 
 ---
 
@@ -436,7 +437,7 @@ These steps require access to the Supabase dashboard or a real browser. The agen
 | 7 | **Long conversations** | Message history loading works with 50+ messages |
 | 8 | **Empty search results** | "No hotels found" → agent tells user, doesn't add empty cards |
 | 9 | **Status messages** | "Searching Booking.com..." / "Adding to board..." shown during long operations |
-| 10 | **Feedback endpoint** | ✅ Already done in Phase 4 |
+| 10 | **Feedback endpoint** | ✅ Already done in Phase 4 *(removed in Phase 10)* |
 
 ---
 

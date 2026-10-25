@@ -1,3 +1,4 @@
+# Reads all settings from the root .env (see .env.example and docs/deploy.md)
 services:
   backend:
     build:
@@ -9,7 +10,10 @@ services:
       - .env
     environment:
       - PORT=8000
-      - ALLOWED_ORIGINS=http://localhost:3000
+      # Must include the URL the browser uses to open the frontend
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      # The backend's public URL, exactly as agents (MCP clients) are given it
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:8000}
 
   frontend:
     build:
@@ -18,7 +22,8 @@ services:
       args:
         - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
         - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-        - NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+        # Called from the browser, so it must be reachable from the user's machine
+        - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL:-http://localhost:8000}
     ports:
       - "3000:3000"
     depends_on:
