@@ -5,6 +5,7 @@ The whole folder is skipped when the local stack isn't reachable.
 
 import os
 import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -16,17 +17,22 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 def _local_supabase() -> dict | None:
     """Return API_URL / ANON_KEY / SERVICE_ROLE_KEY from `supabase status -o env`, or None."""
-    try:
-        out = subprocess.run(
-            ["supabase", "status", "-o", "env"],
-            cwd=REPO_ROOT, capture_output=True, text=True, timeout=30,
-        )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return None
+    # Output goes to a file, not a pipe: with a pipe, a timeout still waits for
+    # docker child processes that keep it open, so a hung Docker hangs the run.
+    with tempfile.TemporaryFile(mode="w+") as stdout:
+        try:
+            out = subprocess.run(
+                ["supabase", "status", "-o", "env"],
+                cwd=REPO_ROOT, stdout=stdout, stderr=subprocess.DEVNULL, timeout=30,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return None
+        stdout.seek(0)
+        text = stdout.read()
     if out.returncode != 0:
         return None
     env = {}
-    for line in out.stdout.splitlines():
+    for line in text.splitlines():
         key, sep, value = line.partition("=")
         if sep:
             env[key.strip()] = value.strip().strip('"')
