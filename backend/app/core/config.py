@@ -36,6 +36,9 @@ class Settings:
     # SERVICE_KEY: Used by backend to bypass RLS (ownership is checked in the API layer)
     SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
 
+    # The backend's public URL, as given to agents (the OAuth resource is <PUBLIC_BASE_URL>/mcp)
+    PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000")
+
     # Google AI (for langchain-google-genai)
     GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
 

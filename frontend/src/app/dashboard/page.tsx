@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { getTrips, deleteTrip, updateTrip, createTrip, TripListItem } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { ProtectedRoute } from '@/components/auth'
@@ -142,6 +143,12 @@ function DashboardContent() {
                 </svg>
                 New Trip
               </button>
+              <Link
+                href="/settings/connections"
+                className="px-4 py-2 bg-white border-2 border-trava-black text-trava-black font-bold transition-all hover:bg-adventure-orange hover:shadow-brutal hover:translate-x-[-2px] hover:translate-y-[-2px]"
+              >
+                Connected apps
+              </Link>
               <button
                 onClick={() => signOut()}
                 className="px-4 py-2 bg-white border-2 border-trava-black text-trava-black font-bold transition-all hover:bg-adventure-orange hover:shadow-brutal hover:translate-x-[-2px] hover:translate-y-[-2px]"

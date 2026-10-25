@@ -12,6 +12,8 @@ services:
       - PORT=8000
       # Must include the URL the browser uses to open the frontend
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      # The backend's public URL, exactly as agents (MCP clients) are given it
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:8000}
 
   frontend:
     build:

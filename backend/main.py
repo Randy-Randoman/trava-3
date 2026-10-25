@@ -66,7 +66,9 @@ async def health_check():
 # API routes
 from app.api.chat import router as chat_router
 from app.api.trips import router as trips_router
+from app.api.oauth_metadata import router as oauth_metadata_router
 
 app.include_router(chat_router, tags=["chat"])
 app.include_router(trips_router, tags=["trips"])
+app.include_router(oauth_metadata_router, tags=["oauth"])
 

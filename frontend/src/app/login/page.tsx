@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth'
+import { safeNextPath } from '@/lib/oauth'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -23,7 +24,7 @@ export default function LoginPage() {
       if (error) {
         setError(error.message)
       } else {
-        router.push('/dashboard')
+        router.push(safeNextPath(new URLSearchParams(window.location.search).get('next')))
       }
     } catch (err) {
       setError('An unexpected error occurred')

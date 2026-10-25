@@ -17,6 +17,7 @@ Before you start, create a Supabase project and get your API keys (see [supabase
 | `GOOGLE_API_KEY` / `ANTHROPIC_API_KEY` | backend | Set the one for your provider |
 | `TAVILY_API_KEY` | backend | Web and image search |
 | `ALLOWED_ORIGINS` | backend | Comma-separated frontend URLs allowed by CORS, e.g. `https://trava.example.com` |
+| `PUBLIC_BASE_URL` | backend | Public URL of the backend, exactly as agents are given it, e.g. `https://api.trava.example.com`. Defaults to `http://localhost:8000`. See [OAuth for agents](#oauth-for-agents) |
 | `PORT` | backend | Defaults to `8000`. Railway sets it automatically |
 | `NEXT_PUBLIC_SUPABASE_URL` | frontend | Same value as `SUPABASE_URL` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | frontend | `anon public` key |
@@ -49,6 +50,7 @@ The backend reads `SUPABASE_URL`, and the frontend reads `NEXT_PUBLIC_SUPABASE_U
    ```bash
    NEXT_PUBLIC_BACKEND_URL=http://your-server:8000
    ALLOWED_ORIGINS=http://your-server:3000
+   PUBLIC_BASE_URL=http://your-server:8000
    ```
 
    Locally, the defaults (`http://localhost:8000` and `http://localhost:3000`) already work.
@@ -90,6 +92,7 @@ The backend image includes Chromium, so Booking.com search works inside the cont
    - `LLM_PROVIDER`, plus `GOOGLE_API_KEY` or `ANTHROPIC_API_KEY`
    - `TAVILY_API_KEY`
    - `ALLOWED_ORIGINS=https://<frontend-domain>`
+   - `PUBLIC_BASE_URL=https://<backend-domain>`
 
    Don't set `PORT`. Railway provides it.
 
@@ -110,6 +113,23 @@ The backend image includes Chromium, so Booking.com search works inside the cont
    ```
 
 8. **Deploy both services** (or redeploy them after changing variables). Check that `https://<backend-domain>/health` returns `{"status":"ok"}`, then sign up on the frontend.
+
+## OAuth for agents
+
+External agents (Claude Code, Claude Cowork, claude.ai) connect to TRAVA with OAuth 2.1. Supabase Auth is the authorization server: it registers the clients, runs the sign-in and issues the tokens. TRAVA hosts the consent page (`/oauth/consent`) and is the resource server. Users see and disconnect their agents under **Connected apps** on the dashboard.
+
+The backend serves the protected resource metadata (RFC 9728) at `/.well-known/oauth-protected-resource` (and `…/mcp`). It names the resource `<PUBLIC_BASE_URL>/mcp`, which clients check against the URL they were given, so `PUBLIC_BASE_URL` must be the backend's public URL exactly.
+
+### Supabase project settings (made by hand)
+
+Nothing in the repo applies these.
+
+1. **Authentication → OAuth Server: enable the OAuth 2.1 server.**
+2. On the same page, set the **Authorization path** to `/oauth/consent`. Supabase joins it to the Site URL, so the Site URL must be the frontend URL (see the steps above).
+3. On the same page, turn on **Allow dynamic client registration**. Agents register themselves; a client gets nothing until a user signs in and presses Allow.
+4. **Project Settings → JWT Keys: the current signing key must be asymmetric** (ES256 or RS256). The backend verifies agent tokens against the project's JWKS and can't verify HS256 tokens.
+
+Access tokens live as long as the project's JWT expiry, but disconnecting an app takes effect at once: on every agent request the backend checks the token's issuer, audience and `client_id`, then calls `public.agent_grant_active` (migration `20260101000009_agent_grants.sql`) to check that the consent isn't revoked, the client isn't deleted and the session still exists.
 
 ## Troubleshooting
 
