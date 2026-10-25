@@ -30,7 +30,8 @@ export default function ConsentPage() {
       return
     }
     const id = new URLSearchParams(window.location.search).get('authorization_id')
-    if (!id) {
+    // supabase-js puts the id into a URL path unencoded, so only accept a plain token
+    if (!id || !/^[A-Za-z0-9_-]+$/.test(id)) {
       setError(FAILED)
       return
     }

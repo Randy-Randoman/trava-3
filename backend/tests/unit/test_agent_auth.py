@@ -86,6 +86,7 @@ async def test_valid_agent_token_returns_user_and_client():
             lambda: _token(key=ec.generate_private_key(ec.SECP256R1())), id="other key"
         ),
         pytest.param(lambda: "not.a.jwt", id="garbage"),
+        pytest.param(lambda: _token(client_id="not-a-uuid"), id="client_id not a uuid"),
     ],
 )
 async def test_rejected_tokens_raise_401(token):
@@ -97,6 +98,15 @@ async def test_rejected_tokens_raise_401(token):
 async def test_revoked_grant_raises_401():
     with pytest.raises(HTTPException) as exc_info:
         await _call(_token(), active=False)
+    assert exc_info.value.status_code == 401
+
+
+async def test_grant_check_error_raises_401():
+    """E.g. the OAuth server is off, so the RPC fails: no token passes, and it's a 401, not a 500."""
+    db = MagicMock()
+    db.client.rpc.return_value.execute.side_effect = RuntimeError("relation auth.oauth_consents does not exist")
+    with patch("app.services.database.db", db), pytest.raises(HTTPException) as exc_info:
+        await auth_module.require_agent(authorization=f"Bearer {_token()}")
     assert exc_info.value.status_code == 401
 
 

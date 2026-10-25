@@ -1,5 +1,6 @@
 """Tests for JWT authentication helpers (app.core.auth)."""
 
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import jwt as pyjwt
@@ -17,8 +18,10 @@ import app.core.auth as auth_module
 def reset_jwks_cache():
     """Reset the module-level JWKS cache before and after each test."""
     auth_module._jwks_keys = None
+    auth_module._jwks_fetched_at = 0.0
     yield
     auth_module._jwks_keys = None
+    auth_module._jwks_fetched_at = 0.0
 
 
 FAKE_KID = "test-key-id"
@@ -100,19 +103,47 @@ class TestRequireAuth:
             assert "invalid" in exc_info.value.detail.lower()
 
     async def test_first_decode_fails_retry_succeeds(self):
-        """If first decode fails but retry after JWKS refresh succeeds, returns user_id."""
+        """If the token's kid is unknown, refresh the JWKS once and retry."""
         decode_mock = MagicMock(
             side_effect=[
-                pyjwt.InvalidTokenError("stale keys"),
+                auth_module.UnknownKeyError("stale keys"),
                 {"sub": FAKE_USER_ID},
             ]
         )
+        auth_module._jwks_fetched_at = -1e9  # cooldown long over
         with _make_get_jwks_patch(), patch.object(
             auth_module, "_decode_token", decode_mock
         ):
             user_id = await auth_module.require_auth(authorization="Bearer rotated.jwt.token")
         assert user_id == FAKE_USER_ID
         assert decode_mock.call_count == 2
+
+    async def test_unknown_kid_within_cooldown_does_not_refetch(self):
+        """Repeated unknown-kid tokens can't force a JWKS fetch each."""
+        decode_mock = MagicMock(side_effect=auth_module.UnknownKeyError("unknown kid"))
+        auth_module._jwks_fetched_at = time.monotonic()
+        with _make_get_jwks_patch(), patch.object(auth_module, "_decode_token", decode_mock):
+            with pytest.raises(HTTPException) as exc_info:
+                await auth_module.require_auth(authorization="Bearer forged.jwt.token")
+        assert exc_info.value.status_code == 401
+        assert decode_mock.call_count == 1
+
+    async def test_invalid_token_does_not_refetch(self):
+        """Only an unknown kid refreshes the JWKS; other invalid tokens fail at once."""
+        decode_mock = MagicMock(side_effect=pyjwt.InvalidTokenError("bad signature"))
+        with _make_get_jwks_patch(), patch.object(auth_module, "_decode_token", decode_mock):
+            with pytest.raises(HTTPException):
+                await auth_module.require_auth(authorization="Bearer bad.jwt.token")
+        assert decode_mock.call_count == 1
+
+    async def test_agent_token_is_rejected(self):
+        """OAuth tokens issued to agents (client_id claim) only work on /mcp."""
+        with _make_get_jwks_patch(), patch.object(
+            auth_module, "_decode_token", return_value={"sub": FAKE_USER_ID, "client_id": "c"}
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await auth_module.require_auth(authorization="Bearer agent.jwt.token")
+        assert exc_info.value.status_code == 401
 
 
 # ---------------------------------------------------------------------------

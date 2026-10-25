@@ -1,13 +1,27 @@
 """JWT authentication helpers using Supabase JWKS (ES256)."""
 
+import asyncio
+import logging
+import time
+import uuid
+
 import httpx
 import jwt
 from fastapi import Header, HTTPException
 
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
+
 # Module-level JWKS cache
 _jwks_keys: list[dict] | None = None
+_jwks_fetched_at = 0.0
+# Unknown-kid refetches are limited so bad tokens can't trigger a fetch each
+_JWKS_REFRESH_COOLDOWN = 60.0
+
+
+class UnknownKeyError(jwt.InvalidTokenError):
+    """The token's `kid` isn't in the cached JWKS (keys may have rotated)."""
 
 
 async def _fetch_jwks() -> list[dict]:
@@ -22,9 +36,14 @@ async def _fetch_jwks() -> list[dict]:
 
 async def _get_jwks(force_refresh: bool = False) -> list[dict]:
     """Return cached JWKS keys, fetching if needed."""
-    global _jwks_keys
+    global _jwks_keys, _jwks_fetched_at
     if _jwks_keys is None or force_refresh:
-        _jwks_keys = await _fetch_jwks()
+        try:
+            _jwks_keys = await _fetch_jwks()
+        except httpx.HTTPError:
+            logger.exception("Failed to fetch JWKS")
+            raise HTTPException(status_code=503, detail="Auth temporarily unavailable")
+        _jwks_fetched_at = time.monotonic()
     return _jwks_keys
 
 
@@ -40,7 +59,7 @@ def _signing_key(token: str, keys: list[dict]):
         if jwk.key_id == kid:
             return jwk.key
 
-    raise jwt.InvalidTokenError("No matching key found")
+    raise UnknownKeyError("No matching key found")
 
 
 def _decode_token(token: str, keys: list[dict]) -> dict:
@@ -81,18 +100,19 @@ def _bearer_token(authorization: str) -> str:
 
 
 async def _verify(token: str, decode) -> dict:
-    """Decode with the cached JWKS keys; on failure refresh them once and retry (key rotation)."""
-    keys = await _get_jwks()
+    """Decode with the cached JWKS keys. Only an unknown `kid` (key rotation) refreshes them,
+    at most once per cooldown, then retries."""
     try:
-        return decode(token, keys)
-    except (jwt.InvalidTokenError, jwt.ExpiredSignatureError):
-        keys = await _get_jwks(force_refresh=True)
         try:
-            return decode(token, keys)
-        except jwt.ExpiredSignatureError:
-            raise HTTPException(status_code=401, detail="Token expired")
-        except jwt.InvalidTokenError:
-            raise HTTPException(status_code=401, detail="Invalid token")
+            return decode(token, await _get_jwks())
+        except UnknownKeyError:
+            if time.monotonic() - _jwks_fetched_at < _JWKS_REFRESH_COOLDOWN:
+                raise
+            return decode(token, await _get_jwks(force_refresh=True))
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except (jwt.InvalidTokenError, jwt.PyJWKSetError):
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 
 async def require_auth(
@@ -106,6 +126,9 @@ async def require_auth(
             ...
     """
     payload = await _verify(_bearer_token(authorization), _decode_token)
+    if "client_id" in payload:
+        # OAuth tokens issued to agents only work on /mcp, where revocation is checked live
+        raise HTTPException(status_code=401, detail="Invalid token")
     return payload["sub"]
 
 
@@ -121,10 +144,20 @@ async def require_agent(
     from app.services.database import db
 
     claims = await _verify(_bearer_token(authorization), _decode_agent_token)
-    active = db.client.rpc(
-        "agent_grant_active",
-        {"p_user": claims["sub"], "p_client": claims["client_id"], "p_session": claims["session_id"]},
-    ).execute().data
+    ids = (claims["sub"], claims["client_id"], claims["session_id"])
+    try:
+        for value in ids:
+            uuid.UUID(str(value))
+        rpc = db.client.rpc(
+            "agent_grant_active", {"p_user": ids[0], "p_client": ids[1], "p_session": ids[2]}
+        )
+        active = (await asyncio.to_thread(rpc.execute)).data
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception:
+        # e.g. the OAuth server isn't enabled, so the auth.oauth_* tables are missing
+        logger.exception("Agent grant check failed")
+        raise HTTPException(status_code=401, detail="Invalid token")
     if active is not True:
         raise HTTPException(status_code=401, detail="Invalid token")
     return {"user_id": claims["sub"], "client_id": claims["client_id"]}
