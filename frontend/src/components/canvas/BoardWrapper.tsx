@@ -7,6 +7,7 @@
  * - Load canvas state from backend GET /trips/{id}/canvas
  * - Auto-save with 2s debounce on change
  * - Stale saves (canvas changed elsewhere) get a 409: reload and show a notice
+ * - Live updates via Supabase Realtime: reload when the board changes elsewhere
  * - Hydrates images from URLs via proxy
  */
 
@@ -14,6 +15,8 @@ import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CanvasConflictError, getCanvasState, saveCanvasState, uploadCanvasImage } from '@/lib/api'
 import { useExcalidrawHydration } from '@/lib/hooks'
+import { shouldReload } from '@/lib/canvasSync'
+import { supabase } from '@/lib/supabase/client'
 import '@excalidraw/excalidraw/index.css'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -130,6 +133,29 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
       window.removeEventListener('canvas-updated', handleCanvasUpdated)
     }
   }, [tripId, loadCanvas])
+
+  // Live updates: reload when the canvas row changes elsewhere (an agent, another tab).
+  // Owner-only RLS limits events to the logged-in owner, so the read-only shared board doesn't subscribe.
+  useEffect(() => {
+    if (readOnly || !tripId) return
+    const channel = supabase
+      .channel(`canvas:${tripId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'canvas_states', filter: `trip_id=eq.${tripId}` },
+        (payload) => {
+          if (payload.eventType === 'DELETE') return
+          const row = payload.new as { last_modified?: string }
+          if (shouldReload(row.last_modified, versionRef.current)) {
+            window.dispatchEvent(new CustomEvent('canvas-updated', { detail: { tripId } }))
+          }
+        }
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [tripId, readOnly])
 
   /**
    * Upload any new user-added images (base64 data URLs) to Supabase Storage,
