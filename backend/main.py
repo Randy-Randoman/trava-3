@@ -8,6 +8,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.routing import Route
 
 from app.api.mcp import mcp_http_app
 from app.services.playwright import shutdown_playwright, warmup_playwright
@@ -74,7 +75,7 @@ app.include_router(chat_router, tags=["chat"])
 app.include_router(trips_router, tags=["trips"])
 app.include_router(oauth_metadata_router, tags=["oauth"])
 
-# Remote MCP server at /mcp; mounted last so the routes above take precedence
+# Remote MCP server: only /mcp goes to the MCP app, so other paths keep FastAPI's 404/405/redirects
 mcp_app = mcp_http_app(allowed_origins)
-app.mount("/", mcp_app)
+app.router.routes.append(Route("/mcp", endpoint=mcp_app))
 

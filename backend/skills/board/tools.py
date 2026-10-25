@@ -165,6 +165,9 @@ async def remove_items(trip_id: str, item_ids: str) -> str:
     ids_to_remove = [id.strip() for id in item_ids.split(",") if id.strip()]
     if not ids_to_remove:
         return "Error: No item IDs provided."
+    # board_read shows 4-char IDs; shorter prefixes could match several items
+    if any(len(rid) < 4 for rid in ids_to_remove):
+        return "Error: Item IDs must be at least 4 characters (as shown by board_read)."
 
     db = DatabaseService()
     board_items = await db.get_board_items(trip_id)

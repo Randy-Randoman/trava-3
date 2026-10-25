@@ -1,17 +1,21 @@
 """LangChain @tool wrapper for Booking.com search."""
 
 import json
+import logging
 from langchain_core.tools import tool
 from .search import search_booking
 from .models import SearchParams
+
+logger = logging.getLogger(__name__)
 
 
 async def search_hotels(params: SearchParams) -> str:
     """Search Booking.com and return hotels as a JSON array of board-ready items (or a message)."""
     try:
         hotels = await search_booking(params)
-    except Exception as e:
-        return f"Search failed: {e}. Playwright/Chromium may not be installed."
+    except Exception:
+        logger.exception("Booking search failed")
+        return "Search failed. Playwright/Chromium may not be installed."
 
     if not hotels:
         return f"No hotels found in {params.destination} for {params.checkin} to {params.checkout}."

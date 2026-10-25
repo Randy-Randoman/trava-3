@@ -1,11 +1,14 @@
 """Web search and image search tools using Tavily API."""
 
 import json
+import logging
 
 from langchain_core.tools import tool
 from tavily import AsyncTavilyClient
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 async def search_web(query: str) -> str:
@@ -19,8 +22,9 @@ async def search_web(query: str) -> str:
         response = await client.search(
             query, max_results=8, search_depth="basic"
         )
-    except Exception as e:
-        return f"Search failed: {e}"
+    except Exception:
+        logger.exception("Web search failed")
+        return "Search failed."
 
     results = []
     for r in response.get("results", []):
@@ -39,8 +43,9 @@ async def search_images(query: str) -> str:
         response = await client.search(
             query, max_results=5, search_depth="basic", include_images=True
         )
-    except Exception as e:
-        return f"Image search failed: {e}"
+    except Exception:
+        logger.exception("Image search failed")
+        return "Image search failed."
 
     images = response.get("images", [])
     if not images:

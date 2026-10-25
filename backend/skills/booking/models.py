@@ -1,15 +1,15 @@
 """Pydantic models for Booking.com search."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 
 class SearchParams(BaseModel):
     destination: str
-    checkin: str       # YYYY-MM-DD
-    checkout: str      # YYYY-MM-DD
-    adults: int = 2
-    rooms: int = 1
+    checkin: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")   # YYYY-MM-DD
+    checkout: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")  # YYYY-MM-DD
+    adults: int = Field(default=2, ge=1, le=30)
+    rooms: int = Field(default=1, ge=1, le=30)
     # Vibe / preference filters
     property_type: Optional[str] = None   # hotel, apartment, hostel, resort, villa, guesthouse, boutique
     min_review_score: Optional[int] = None  # 6, 7, 8, or 9 (maps to Booking.com's 60-90 scale)

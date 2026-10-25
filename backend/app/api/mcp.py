@@ -174,7 +174,7 @@ async def image_search(query: str) -> str:
 
 
 def mcp_http_app(allowed_origins: list[str]):
-    """The Streamable HTTP app serving POST /mcp. Mount it at "/" and run its lifespan."""
+    """The Streamable HTTP app serving POST /mcp. Route /mcp to it and run its lifespan."""
     return server.streamable_http_app(
         streamable_http_path="/mcp",
         stateless_http=True,

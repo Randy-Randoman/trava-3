@@ -3,6 +3,9 @@
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+from pydantic import ValidationError
+
 from skills.booking.models import Hotel, SearchParams
 from skills.booking.tools import booking_search, search_hotels
 from skills.web_search.tools import image_search, search_images, search_web, web_search
@@ -32,7 +35,12 @@ class TestSearchHotels:
     async def test_search_error(self):
         with patch("skills.booking.tools.search_booking", AsyncMock(side_effect=RuntimeError("boom"))):
             result = await search_hotels(PARAMS)
-        assert result == "Search failed: boom. Playwright/Chromium may not be installed."
+        assert result == "Search failed. Playwright/Chromium may not be installed."
+
+    def test_rejects_bad_dates_and_counts(self):
+        for bad in ({"checkin": "2026-03-17&x=1"}, {"adults": 0}, {"rooms": 31}):
+            with pytest.raises(ValidationError):
+                PARAMS.model_validate({**PARAMS.model_dump(), **bad})
 
     async def test_tool_passes_params_through(self):
         search = AsyncMock(return_value=[])

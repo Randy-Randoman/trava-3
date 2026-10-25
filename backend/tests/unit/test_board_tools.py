@@ -215,6 +215,13 @@ class TestBoardRemoveItems:
         assert result == "No items found matching IDs: zzzz, yyyy"
         db.update_board_items.assert_not_called()
 
+    async def test_short_id_is_rejected(self, patch_db, remove):
+        db = patch_db(make_db(board_items=list(BOARD), canvas=CANVAS))
+        result = await remove(item_ids="a", trip_id=TRIP_ID)
+
+        assert result.startswith("Error: Item IDs must be at least 4 characters")
+        db.update_board_items.assert_not_called()
+
     async def test_empty_board(self, patch_db, remove):
         patch_db(make_db())
         result = await remove(item_ids="abcd", trip_id=TRIP_ID)
