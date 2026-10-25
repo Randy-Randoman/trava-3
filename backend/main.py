@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.mcp import mcp_http_app
 from app.services.playwright import shutdown_playwright, warmup_playwright
 
 # Show our own INFO logs; third-party libraries (e.g. httpx, which logs request URLs) stay at WARNING
@@ -24,7 +25,8 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle for the application."""
     import asyncio
     asyncio.create_task(warmup_playwright())
-    yield
+    async with mcp_app.router.lifespan_context(mcp_app):
+        yield
     # Shutdown: clean up shared resources
     await shutdown_playwright()
 
@@ -71,4 +73,8 @@ from app.api.oauth_metadata import router as oauth_metadata_router
 app.include_router(chat_router, tags=["chat"])
 app.include_router(trips_router, tags=["trips"])
 app.include_router(oauth_metadata_router, tags=["oauth"])
+
+# Remote MCP server at /mcp; mounted last so the routes above take precedence
+mcp_app = mcp_http_app(allowed_origins)
+app.mount("/", mcp_app)
 

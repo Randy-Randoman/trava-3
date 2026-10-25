@@ -19,3 +19,6 @@ tavily-python==0.7.21
 
 # Auth (Phase 9)
 PyJWT[crypto]==2.11.0
+
+# Remote MCP server (Phase 11)
+mcp==2.3.0
