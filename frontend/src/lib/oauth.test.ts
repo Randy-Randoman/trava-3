@@ -23,5 +23,7 @@ describe('safeNextPath', () => {
     expect(safeNextPath('https://evil.test')).toBe('/dashboard');
     expect(safeNextPath('//evil.test')).toBe('/dashboard');
     expect(safeNextPath('/\\evil.test')).toBe('/dashboard');
+    expect(safeNextPath('/\t/evil.test')).toBe('/dashboard');
+    expect(safeNextPath('/\n/evil.test')).toBe('/dashboard');
   });
 });
