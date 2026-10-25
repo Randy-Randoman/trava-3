@@ -58,6 +58,11 @@ export default function BoardWrapper({ tripId, readOnly = false }: BoardWrapperP
   }, [setExcalidrawApi, hydrateImages, setOriginalFiles])
 
   const loadCanvas = useCallback(async (shouldClearCache = false) => {
+    // A pending autosave holds the pre-reload scene; sent with the new version it would overwrite the reload
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+      saveTimeoutRef.current = null
+    }
     setLoading(true)
 
     if (shouldClearCache) {

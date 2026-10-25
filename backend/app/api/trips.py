@@ -124,8 +124,13 @@ async def update_canvas(trip_id: str, canvas: CanvasState, user_id: str = Depend
             trip_id=trip_id,
             scene_elements=canvas.elements,
             scene_files=canvas.files,
-            scene_app_state=canvas.appState
+            scene_app_state=canvas.appState,
+            expected_version=current_version
         )
+        if result is None:
+            # Someone wrote between our version check and the write
+            logger.info(f"Canvas save conflict for trip {trip_id}")
+            raise HTTPException(status_code=409, detail="Canvas changed, reload")
 
         # Reconcile board_items: remove items whose cards were deleted from the canvas
         board_items = await db.get_board_items(trip_id)

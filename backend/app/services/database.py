@@ -157,8 +157,9 @@ class DatabaseService:
         trip_id: str,
         scene_elements: List[Dict[str, Any]] = None,
         scene_files: Dict[str, Any] = None,
-        scene_app_state: Dict[str, Any] = None
-    ) -> Dict[str, Any]:
+        scene_app_state: Dict[str, Any] = None,
+        expected_version: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
         """
         Update canvas state for a trip (upsert to guarantee persistence)
 
@@ -167,6 +168,8 @@ class DatabaseService:
             scene_elements: Excalidraw elements array
             scene_files: Excalidraw files dictionary (for images)
             scene_app_state: Excalidraw app state
+            expected_version: if set, only update when last_modified still equals it
+                (returns None on a conflict)
         """
         logger.debug(f"update_canvas_state({trip_id})")
         update_data = {}
@@ -180,6 +183,13 @@ class DatabaseService:
 
         if not update_data:
             return {}
+
+        if expected_version is not None:
+            # Only write if nobody changed the canvas since expected_version; None = conflict
+            response = self.client.table("canvas_states").update(update_data).eq(
+                "trip_id", trip_id
+            ).eq("last_modified", expected_version).execute()
+            return response.data[0] if response.data else None
 
         # Use upsert to ensure the row is created if it doesn't exist yet.
         # The trigger on trips should create canvas_states rows, but if it

@@ -96,6 +96,19 @@ async def test_current_base_version_saves_and_reconciles(client):
     mock_db.update_canvas_state.assert_awaited_once()
     # card2 (g2) was deleted in the tab, so its board item goes away
     mock_db.update_board_items.assert_awaited_once_with(FAKE_TRIP_ID, [BOARD_ITEMS[0]])
+    assert mock_db.update_canvas_state.await_args.kwargs["expected_version"] == NEW_VERSION
+
+
+@pytest.mark.asyncio
+async def test_write_racing_the_version_check_returns_409_without_reconcile(client):
+    with patch("app.api.trips.verify_trip_owner", new_callable=AsyncMock), \
+         patch("app.api.trips.db") as mock_db:
+        _mock_db(mock_db)
+        mock_db.update_canvas_state = AsyncMock(return_value=None)  # conditional update matched no row
+        resp = await _put(client, NEW_VERSION)
+
+    assert resp.status_code == 409
+    mock_db.update_board_items.assert_not_awaited()
 
 
 @pytest.mark.asyncio
