@@ -10,11 +10,11 @@ Group travel planning is messy. Shared Google Docs don't scale past three people
 
 Trava is a different shape: a **chat agent + a shared visual canvas**. You tell the agent what you want ("find us a 3-night stay in Lisbon under €150 per night"), it hits Booking.com for real prices and drops cards onto an Excalidraw board. The agent *sees* the board, so it can reason about what's already there — add activities around an existing hotel, replace a pricey option, group by day — without wiping what you've placed.
 
-The agent is swappable (Gemini or Claude) and the tool layer is modular: each capability is a Python package in `skills/` that exports a list of LangChain tools and a prompt. Add a folder, restart, done.
+The agent is swappable (Gemini or Claude) and the tool layer is modular: each capability is a Python package in `backend/skills/` that exports a list of LangChain tools and a prompt. Add a folder, restart, done.
 
 ## Status
 
-**Self-hosted only.** There is no hosted version and there won't be one — you'll set up Supabase and your own LLM + search keys. Early single-maintainer project, runs locally today, opened for collaboration.
+**Self-hosted only.** There is no hosted version and there won't be one — you'll set up Supabase and your own LLM + search keys. A personal project, shared as-is. Run it locally, or deploy it yourself (see [`docs/deploy.md`](docs/deploy.md)).
 
 ## Features
 
@@ -32,8 +32,9 @@ The agent is swappable (Gemini or Claude) and the tool layer is modular: each ca
 
 ### Local tooling
 
-- Node.js 18+
+- Node.js 20.9+ (required by Next.js 16)
 - Python 3.11+
+- [Supabase CLI](https://supabase.com/docs/guides/cli) — to apply migrations (and for the local stack the integration tests use)
 - macOS / Linux tested; Windows via WSL should work but is unverified
 
 ### External services you must provision yourself
@@ -67,9 +68,10 @@ npm install
 ln -s ../.env .env.local             # frontend reads NEXT_PUBLIC_* from the same file
 npm run dev                          # http://localhost:3000
 
-# 4. Database — run the migrations once
-# Paste each of backend/migrations/001…007.sql into the Supabase SQL Editor in order.
-# Full walkthrough: docs/supabase-setup.md
+# 4. Database — apply the migrations once (Supabase CLI, from the repo root)
+supabase link --project-ref <your-project-ref>
+supabase db push
+# Or run the files in supabase/migrations/ in order in the SQL Editor — see docs/supabase-setup.md
 ```
 
 Open [http://localhost:3000](http://localhost:3000) and sign up.
@@ -90,7 +92,8 @@ Your first trip end-to-end:
 ```
 frontend/   Next.js 16 + React 19 + Tailwind (~35% chat, ~65% Excalidraw)
 backend/    FastAPI + LangGraph ReAct agent
-skills/     Auto-discovered tool packages (booking, board, web_search)
+backend/skills/   Auto-discovered tool packages (booking, board, web_search)
+supabase/         Migrations + local stack config (Supabase CLI)
 ```
 
 - **Frontend** — dashboard, chat panel, Excalidraw canvas, shareable boards.
@@ -156,8 +159,8 @@ flowchart LR
 
 Skills are the extensibility hook. Every capability the agent has — searching Booking.com, reading the board, web search — is a skill. Adding one is ~20 lines.
 
-1. Make a new folder under `skills/`, e.g. `skills/weather/`.
-2. Create `skills/weather/__init__.py`:
+1. Make a new folder under `backend/skills/`, e.g. `backend/skills/weather/`.
+2. Create `backend/skills/weather/__init__.py`:
 
    ```python
    from .tools import get_weather
@@ -166,7 +169,7 @@ Skills are the extensibility hook. Every capability the agent has — searching 
    PROMPT = "You can call get_weather(city) to fetch the forecast. Use it when the user asks about weather."
    ```
 
-3. Create `skills/weather/tools.py`:
+3. Create `backend/skills/weather/tools.py`:
 
    ```python
    from langchain_core.tools import tool
@@ -178,21 +181,19 @@ Skills are the extensibility hook. Every capability the agent has — searching 
        return f"Sunny in {city}, 22°C"
    ```
 
-4. Restart the backend. `skills/__init__.py` auto-discovers the new package and the agent picks up the tool + prompt on next boot.
+4. Restart the backend. `backend/skills/__init__.py` auto-discovers the new package and the agent picks up the tool + prompt on next boot.
 
-That's the contract. For a real example, look at `skills/booking/` or `skills/web_search/`.
+That's the contract. For a real example, look at `backend/skills/booking/` or `backend/skills/web_search/`.
 
-## Using with Claude Code / Claude Cowork (experimental)
+## Using with Claude Code / Claude Cowork (planned)
 
 The skills are designed to be reusable outside the bundled LangGraph agent. Anthropic's **Claude Code** (CLI) and **Claude Cowork** (desktop agent) both consume tools via [MCP](https://modelcontextprotocol.io/), so a thin MCP server wrapping the existing skills would let either driver the trip board directly.
 
-The wrapper doesn't exist yet — it's a planned follow-up (see open issues). Specifically it would:
+The wrapper doesn't exist yet — it's planned as Phase 11 in [`docs/plan.md`](docs/plan.md). Specifically it would:
 
 - Wrap the `TOOLS` from each skill as MCP tools
 - Replace the agent's `InjectedState("trip_id")` with an explicit `trip_id` argument
 - Reuse `backend/app/core/auth.py` for JWT-based ownership checks
-
-Contributions welcome.
 
 ## Environment variables
 
@@ -208,7 +209,7 @@ Contributions welcome.
 | `TAVILY_API_KEY` | Yes | [tavily.com](https://tavily.com) — web + image search |
 | `NEXT_PUBLIC_BACKEND_URL` | Yes | Usually `http://localhost:8000` in dev |
 
-See `.env.example` for the full template.
+See `.env.example` for the full template. For deployments, the backend also reads `ALLOWED_ORIGINS` (CORS) — see [`docs/deploy.md`](docs/deploy.md).
 
 ## Project structure
 
@@ -218,7 +219,7 @@ trava/
 │   └── src/
 │       ├── app/                # Pages (home, dashboard, login, board)
 │       ├── components/         # Canvas, chat, auth
-│       ├── lib/                # API helpers, hooks, auth
+│       ├── lib/                # API helpers, hooks, auth (+ Vitest tests)
 │       └── types/              # TypeScript types
 │
 ├── backend/                    # FastAPI app
@@ -230,31 +231,45 @@ trava/
 │   │   ├── logic/              # Transformer (Excalidraw element generation)
 │   │   ├── models/             # Pydantic schemas
 │   │   └── services/           # Database, Playwright
-│   └── migrations/             # SQL migrations (001–007)
+│   ├── skills/                 # Skill packages (auto-discovered)
+│   │   ├── booking/            # Booking.com search
+│   │   ├── board/              # Board read/add/remove/clear
+│   │   └── web_search/         # Tavily web + image search
+│   └── tests/
+│       ├── unit/               # Pytest unit tests
+│       └── integration/        # Pytest against a local Supabase stack
 │
-├── skills/                     # Skill packages (auto-discovered)
-│   ├── booking/                # Booking.com search
-│   ├── board/                  # Board read/add/remove/clear
-│   └── web_search/             # Tavily web + image search
+├── supabase/
+│   ├── config.toml             # Local stack config (Supabase CLI)
+│   └── migrations/             # SQL migrations (001–008, timestamped)
 │
-├── tests/unit/                 # Pytest suite (~55 tests)
-├── docs/                       # Contributor docs
+├── docs/                       # Setup, deployment and plan docs
 ├── .env.example                # Environment template
-└── docker-compose.yml          # Docker setup (local)
+└── docker-compose.yml          # Docker Compose setup
 ```
 
 ## Tests
 
 ```bash
-source backend/.venv/bin/activate
-python -m pytest tests/unit/ -v
+# Backend (venv active)
+cd backend
+pip install -r requirements-dev.txt          # pytest lives here, not in requirements.txt
+python -m pytest tests/unit -v               # unit tests, no services needed
+python -m pytest tests/integration -v        # needs `supabase start` (Docker + Supabase CLI) from the repo root; skips otherwise
+
+# Frontend (Vitest)
+cd ../frontend && npm test
 ```
 
-~55 unit tests covering URL building, URL cleaning, auth, share tokens, and models. Runs in under a second. Integration / E2E tests are not included.
+Unit tests cover URL building and cleaning, auth, share tokens, board tools, budget parsing and models. Integration tests check row-level security, storage rules and the main API flow. No E2E tests.
+
+## Deployment
+
+Docker Compose (local or VPS) and Railway: [`docs/deploy.md`](docs/deploy.md).
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md). TL;DR: open an issue before a big PR, match existing code style, add a test if the change is non-trivial.
+This is a personal project shared as-is. It isn't accepting contributions or issues; feel free to fork it.
 
 ## Design docs
 

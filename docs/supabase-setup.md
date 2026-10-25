@@ -15,15 +15,23 @@ Paste all four into your root `.env` file (copied from `.env.example`).
 
 ## 2. Run the migrations
 
-Open the Supabase **SQL Editor** (in the left sidebar) and run each file from `backend/migrations/` in order:
+Migrations live in `supabase/migrations/`. The easiest way is the [Supabase CLI](https://supabase.com/docs/guides/cli), from the repo root:
 
-1. `001_initial_schema.sql` — profiles, trips, canvas_states
-2. `002_rls_policies.sql` — row-level security on the above
-3. `003_chat_messages.sql` — chat history table
-4. `004_revise_chat_schema.sql` — schema cleanup on chat_messages
-5. `005_board_items.sql` — agent-managed board items
-6. `006_canvas_images_bucket.sql` — storage bucket for canvas images (created automatically — no manual bucket setup)
-7. `007_user_approval.sql` — legacy user-approval gate (removed again by the security cleanup migration)
+```bash
+supabase link --project-ref <your-project-ref>   # the ref is in your project URL
+supabase db push
+```
+
+Or open the Supabase **SQL Editor** and run each file from `supabase/migrations/` in order (they sort by their timestamp prefix):
+
+1. `…01_initial_schema.sql` — profiles, trips, canvas_states
+2. `…02_rls_policies.sql` — row-level security on the above
+3. `…03_chat_messages.sql` — chat history table
+4. `…04_revise_chat_schema.sql` — schema cleanup on chat_messages
+5. `…05_board_items.sql` — agent-managed board items
+6. `…06_canvas_images_bucket.sql` — storage bucket for canvas images (created automatically — no manual bucket setup)
+7. `…07_user_approval.sql` — legacy user-approval gate (removed again by the next migration)
+8. `…08_security_cleanup.sql` — drops the approval gate and public share policies, owner-scoped image writes
 
 Paste each file's contents into the SQL Editor, one at a time, and hit **Run**. Order matters — later migrations depend on earlier ones.
 
@@ -37,4 +45,4 @@ Supabase's built-in email sender is rate-limited (~2 emails/hour on the free tie
 
 ## Known limitation
 
-The RLS policies in `002_rls_policies.sql` assume Supabase Auth. Running against a plain PostgreSQL (no Supabase Auth) would require rewriting those policies and the auth middleware — not currently supported.
+The RLS policies in `supabase/migrations/…02_rls_policies.sql` assume Supabase Auth. Running against a plain PostgreSQL (no Supabase Auth) would require rewriting those policies and the auth middleware — not currently supported.

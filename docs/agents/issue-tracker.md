@@ -13,6 +13,5 @@ Agent-facing notes on where work items live and how to handle them.
   - Backend unit: `cd backend && python -m pytest tests/unit -q`
   - Backend integration (needs `supabase start`): `cd backend && python -m pytest tests/integration -q`
   - Frontend: `cd frontend && npm test && npm run lint && npx tsc --noEmit`
-  - Until #42 lands, the backend tests still run from the repo root: `python -m pytest tests/unit -q`
 - **Closing:** reference the issue in the commit message (`Closes #N`); the PR to `main` closes it.
 - **Not for agents:** steps listed under "Manual steps" in `docs/plan.md` (Supabase dashboard, GitHub settings, live database).
