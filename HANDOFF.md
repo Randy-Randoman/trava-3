@@ -7,13 +7,13 @@ All 17 issues (#42–#58) are implemented on `dev`, which is 29 commits ahead of
 | Suite | Result |
 |---|---|
 | Backend unit (`cd backend && python -m pytest tests/unit`) | 153 passed |
-| Backend integration (`… tests/integration`) | 29 skipped (**never run live**, see below) |
+| Backend integration (`… tests/integration`) | 29 passed against local Supabase (2026-10-26) |
 | Frontend (`npm test`) | 42 passed |
 | `npm run lint` | 0 errors, 37 warnings (`any` + React 19 effect rule, downgraded on purpose) |
 | `npx tsc --noEmit` | clean |
 | `npm run build` | OK |
 
-**The big caveat:** Docker Desktop was hung for the whole run, so nothing that needs Docker was executed: the integration tests, the local Supabase, migrations 008–010 and the container builds. Treat those parts as written and reviewed, but untested.
+**Update 2026-10-26:** after a Docker restart, all migrations (001–011) applied cleanly on a local stack and all 29 integration tests pass. The first live run found a real bug: sign-up failed on every fresh install (`handle_new_user` used an unqualified `profiles`), fixed in migration 011. Still untested: the container builds and the real OAuth flow.
 
 ---
 
@@ -27,7 +27,7 @@ All 17 issues (#42–#58) are implemented on `dev`, which is 29 commits ahead of
    cd backend && python -m pytest tests/integration -v
    ```
    Expect a few first-run fixes. One known risk: the local stack may sign JWTs with HS256 only. If `test_api_flow` returns 401, either override `require_auth` in that test or run `supabase gen signing-key` and set `[auth] signing_keys_path` in `supabase/config.toml`.
-3. **Live Supabase:** apply migrations **008, 009 and 010** (`supabase link` + `supabase db push --dry-run`, then without `--dry-run`). If an old `user_feedback` table exists, drop it by hand.
+3. **Live Supabase:** apply migrations **008, 009, 010 and 011** (`supabase link` + `supabase db push --dry-run`, then without `--dry-run`). If an old `user_feedback` table exists, drop it by hand.
 
 ## 1. Per-issue checks (open X, do Y, expect Z)
 
