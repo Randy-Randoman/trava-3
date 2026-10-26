@@ -30,8 +30,17 @@ async def test_create_save_share_and_view_public_board(client, user_a):
     assert resp.status_code == 200, resp.text
     trip_id = resp.json()["id"]
 
+    # Load first, like the board does: a save must name the version it was based on
+    resp = await client.get(f"/trips/{trip_id}/canvas", headers=headers)
+    assert resp.status_code == 200, resp.text
+    version = resp.json()["last_modified"]
+
     elements = [{"id": "el1", "type": "rectangle"}]
-    resp = await client.put(f"/trips/{trip_id}/canvas", json={"elements": elements, "files": {}}, headers=headers)
+    resp = await client.put(
+        f"/trips/{trip_id}/canvas",
+        json={"elements": elements, "files": {}, "base_version": version},
+        headers=headers,
+    )
     assert resp.status_code == 200, resp.text
 
     resp = await client.get(f"/trips/{trip_id}/canvas", headers=headers)
