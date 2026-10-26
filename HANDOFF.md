@@ -13,7 +13,10 @@ All 17 issues (#42–#58) are implemented on `dev`, which is 29 commits ahead of
 | `npx tsc --noEmit` | clean |
 | `npm run build` | OK |
 
-**Update 2026-10-26:** after a Docker restart, all migrations (001–011) applied cleanly on a local stack and all 29 integration tests pass. The first live run found a real bug: sign-up failed on every fresh install (`handle_new_user` used an unqualified `profiles`), fixed in migration 011. Still untested: the container builds and the real OAuth flow.
+**Update 2026-10-26:** after a Docker restart, all migrations (001–011) applied cleanly on a local stack and all 29 integration tests pass. The first live run found a real bug: sign-up failed on every fresh install (`handle_new_user` used an unqualified `profiles`), fixed in migration 011. Also verified on 2026-10-26:
+- **Docker:** both images build. The backend runs as `trava` and launches Chromium; `/health` is ok and `/mcp` answers 401. The frontend serves pages with the anti-framing headers.
+- **OAuth + MCP end to end:** against the local Supabase OAuth server (enabled in `supabase/config.toml`), 19/19 checks pass. The checks cover discovery, dynamic client registration, PKCE with `resource`, consent, token exchange, the MCP tools, token separation, and revocation taking effect at once. supabase/auth#2820 did not reproduce locally.
+- **Still untested:** a real client (Claude Code, claude.ai, ChatGPT) against a hosted deploy.
 
 ---
 
